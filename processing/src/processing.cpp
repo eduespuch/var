@@ -26,27 +26,25 @@ class Procesing {
 
 	// Procesa los datos de láser
 	void commandCallback(const sensor_msgs::LaserScan::ConstPtr& msg) {
-		//ROS_INFO_STREAM("AngleMin: " << msg->angle_min); // Mínimo valor angular del láser
-		//ROS_INFO_STREAM("AngleMax: " << msg->angle_max); // Máximo valor angular del láser
-		//ROS_INFO_STREAM("AngleIncrement: " << msg->angle_increment); // Incremento angular entre dos beams
-		//ROS_INFO_STREAM("RangeMin: " << msg->range_min); // Mínimo valor que devuelve el láser
-		//ROS_INFO_STREAM("RangeMax: " << msg->range_max); // Máximo valor que devuelve el láser. Valores por debajo y por encima de estos rangos no deben ser tenidos en cuenta.
-		//int totalValues = ceil((msg->angle_max-msg->angle_min)/msg->angle_increment); // Total de valores que devuelve el láser
-		/*for (int i=0; i< totalValues; i++) {
+		ROS_INFO_STREAM("AngleMin: " << msg->angle_min); // Mínimo valor angular del láser
+		ROS_INFO_STREAM("AngleMax: " << msg->angle_max); // Máximo valor angular del láser
+		ROS_INFO_STREAM("AngleIncrement: " << msg->angle_increment); // Incremento angular entre dos beams
+		ROS_INFO_STREAM("RangeMin: " << msg->range_min); // Mínimo valor que devuelve el láser
+		ROS_INFO_STREAM("RangeMax: " << msg->range_max); // Máximo valor que devuelve el láser. Valores por debajo y por encima de estos rangos no deben ser tenidos en cuenta.
+		int totalValues = ceil((msg->angle_max-msg->angle_min)/msg->angle_increment); // Total de valores que devuelve el láser
+		for (int i=0; i< totalValues; i++) {
 			ROS_INFO_STREAM("Values[" << i << "]:" << msg->ranges[i]); // Acceso a los valores de rango
-		}*/
+		}
 
 		std_msgs::String msgInfo;
 
 	    std::stringstream ss;
-        ss << "Values[" << count << "]:" << msg->ranges[count];
+        ss << msg->ranges[45]<< ":" << msg->ranges[0]<< ":"<< msg->ranges[315];
   	    msgInfo.data = ss.str();
-
-		count=count>=358?0:count++;
 
 		chatter_pub.publish(msgInfo);
 
-		ROS_INFO("%s", msgInfo.data.c_str());
+		//ROS_INFO("%s", msgInfo.data.c_str());
 
 	};
 
