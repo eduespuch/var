@@ -2,6 +2,10 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/String.h>
+
+
+using namespace std_msgs;
+
 class Commander
 {
     private:
@@ -20,10 +24,30 @@ class Commander
             sub=nh_.subscribe("info",1000,Commander::transmissionACK);
         }
 
+        static void extractInfo(int* ptr){
+
+            
+
+        }
+
         static void transmissionACK(const std_msgs::String::ConstPtr& msg){
 
-            ROS_INFO("Recibido mensaje: [%s]",msg->data.c_str());
+            std::stringstream putita;
 
+            int info[3];
+            putita<<msg->data.c_str();
+
+            std::string putero;
+            
+           char c;
+
+            while(getline(putita,putero,':')){
+
+                ROS_INFO_STREAM(putero);
+
+            }
+
+           
         }
 
         //Loop forever while sending drive commands based on keyboard input
