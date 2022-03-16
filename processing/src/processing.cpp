@@ -26,25 +26,72 @@ class Procesing {
 
 	// Procesa los datos de láser
 	void commandCallback(const sensor_msgs::LaserScan::ConstPtr& msg) {
-		ROS_INFO_STREAM("AngleMin: " << msg->angle_min); // Mínimo valor angular del láser
-		ROS_INFO_STREAM("AngleMax: " << msg->angle_max); // Máximo valor angular del láser
-		ROS_INFO_STREAM("AngleIncrement: " << msg->angle_increment); // Incremento angular entre dos beams
-		ROS_INFO_STREAM("RangeMin: " << msg->range_min); // Mínimo valor que devuelve el láser
-		ROS_INFO_STREAM("RangeMax: " << msg->range_max); // Máximo valor que devuelve el láser. Valores por debajo y por encima de estos rangos no deben ser tenidos en cuenta.
-		int totalValues = ceil((msg->angle_max-msg->angle_min)/msg->angle_increment); // Total de valores que devuelve el láser
-		for (int i=0; i< totalValues; i++) {
-			ROS_INFO_STREAM("Values[" << i << "]:" << msg->ranges[i]); // Acceso a los valores de rango
+		
+		std_msgs::String msgInfo;
+	    std::stringstream ss;
+
+		//Obtiene el angulo de interseccion a la pared de la izquierda
+
+		int firstAngle=50;
+		int secAngle=51;
+		bool first=false;
+
+		for(int i= 50;i<=100;i++){
+			if(!first&&msg->ranges[i]<=3.5){
+				first=true;
+				firstAngle=i;
+			}
+			if(first&&msg->ranges[i]<=3.5){
+				secAngle=i;
+			}
 		}
 
-		std_msgs::String msgInfo;
+		float o=(sin(firstAngle)*msg->ranges[firstAngle]-sin(secAngle)*msg->ranges[secAngle]); 
+		float a=(cos(firstAngle)*msg->ranges[firstAngle]-cos(secAngle)*msg->ranges[secAngle]);
+		float d=(sqrt(pow(o,2)+pow(a,2)));
+		float wallAngle=1/sin(o/d);//esto creo que no esta bien
 
-	    std::stringstream ss;
-        ss << msg->ranges[45]<< ":" << msg->ranges[0]<< ":"<< msg->ranges[315];
+		//Extraer los datos de interes
+
+		float minDistance=msg->range_max;
+		float frontUmbral=0.5;
+		float lateralUmbral=0.3;
+		float angleCurveUmbral=0.436332; //25º
+		int relAngle=360;
+
+		for(int i=0;i<=25;i++){
+			if(msg->ranges[i]<minDistance){
+				minDistance=msg->ranges[i];
+				relAngle=i;
+			}
+		}
+		for(int i=335;i<=358;i++){
+			if(msg->ranges[i]<minDistance){
+				minDistance=msg->ranges[i];
+				relAngle=i;
+			}
+		}
+
+		if(msg->ranges[50]>3.5){
+			
+		}
+
+		if(minDistance<frontUmbral){//obstruccion delante, tiene que girar
+			ss<< "3";
+		}else if(wallAngle>angleCurveUmbral){
+			ss<<"2";
+		}else{
+			ss<<"1";
+		}
+
+		ss<<":"<<msg->ranges[firstAngle]<<","<<msg->ranges[secAngle]<<":sqrt("<<o<<"²+"<<a<<"²)"<<"="<<d<<"<->"<<wallAngle<<":"<<minDistance;
+
+
   	    msgInfo.data = ss.str();
 
 		chatter_pub.publish(msgInfo);
 
-		//ROS_INFO("%s", msgInfo.data.c_str());
+		ROS_INFO("%s", msgInfo.data.c_str());
 
 	};
 
