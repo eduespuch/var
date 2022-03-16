@@ -21,73 +21,80 @@ class Commander
             nh_ = nh;
             //set up the publisher for the cmd_vel topic
             cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
-            sub=nh_.subscribe("info",1000,Commander::transmissionACK);
+            sub=nh_.subscribe("info",1000,&Commander::transmissionACK,this);
         }
 
-        static void extractInfo(int* ptr){
-
-            
-
-        }
-
-        static void transmissionACK(const std_msgs::String::ConstPtr& msg){
-
-            std::stringstream putita;
-
-            int info[3];
-            putita<<msg->data.c_str();
-
-            std::string putero;
-            
-           char c;
-
-            while(getline(putita,putero,':')){
-
-                ROS_INFO_STREAM(putero);
-
-            }
+         void order(int estado,float angulo,float distancia){//Toma las decisiones en base a los valores extraídos del mensaje.
 
            
+
+            geometry_msgs::Twist base_cmd;
+
+            ROS_INFO_STREAM("Estado: " << estado); // Mínimo valor angular del láser
+            ROS_INFO_STREAM("Angulo: " << angulo); // Mínimo valor angular del láser
+            ROS_INFO_STREAM("Distancia: " << distancia); // Mínimo valor angular del láser
+
+            switch(estado){
+
+                case 1:     //Ir recto
+                    base_cmd.angular.z = 0.00;
+                    base_cmd.linear.x = 0.3;
+                    break;
+
+
+                case 2:
+                    base_cmd.angular.z = 0.5;
+                    base_cmd.linear.x = 0.1;
+                    break;
+
+                case 3:
+                    base_cmd.angular.z = 1.0;
+                    base_cmd.linear.x = 0.1;
+                    break;
+
+                default:
+                    ROS_INFO_STREAM("Invalid data.");
+
+            }
+
+            cmd_vel_pub_.publish(base_cmd);
+
         }
 
-        //Loop forever while sending drive commands based on keyboard input
-        bool driveKeyboard() {
-             std::cout << "Type a command and then press enter. " <<
-                   "Use '+' to move forward, 'l' to turn left, " << "'r' to turn right, '.' to exit.\n";
-             //we will be sending commands of type "twist"
-             geometry_msgs::Twist base_cmd;
-             char cmd[50];
-             while(nh_.ok()) {
-                 std::cin.getline(cmd, 50);
-                 if(cmd[0]!='+' && cmd[0]!='l' && cmd[0]!='r' && cmd[0]!='.') {
-                     std::cout << "unknown command:" << cmd << "\n";
-                     continue;
-                 }
-                 base_cmd.linear.x = base_cmd.linear.y = base_cmd.angular.z = 0; 
-                 //move forward
-                 if(cmd[0]=='+') {
-                     base_cmd.linear.x = 0.25;
-                 } 
-                 //turn left (yaw) and drive forward at the same time
-                 else if(cmd[0]=='l') {
-                     base_cmd.angular.z = 0.75;
-                     base_cmd.linear.x = 0.25;
-                 } 
-                 //turn right (yaw) and drive forward at the same time
-                 else if(cmd[0]=='r') {
-                     base_cmd.angular.z = -0.75;
-                     base_cmd.linear.x = 0.25;
-                 } 
-                 //quit
-                 else if(cmd[0]=='.') {
-                     break;
-                 }
-                 //publish the assembled command
-                 cmd_vel_pub_.publish(base_cmd);
-            }
-            return true;
+     void extractInfo(float* ptr){//Separa los valores individuales del mensaje.
+
+            float aux;
+            
+            int estado=(int)*ptr;
+            float angulo=*(ptr+1);
+            float distancia=*(ptr+2);
+
+            order(estado,angulo,distancia);
+
         }
-  
+
+         void transmissionACK(const std_msgs::String::ConstPtr& msg){//Recibe los mensajes y construye un formato usable por nuestro código.
+
+            std::stringstream ss;
+
+            int i=0;
+
+            float info[3];
+            ss<<msg->data.c_str();
+
+            std::string aux;
+            
+            while(getline(ss,aux,':')){
+
+                info[i]=stof(aux);
+                i++;
+
+            }
+
+            extractInfo(info);
+
+        }
+
 };
 
 int main(int argc, char** argv) {
