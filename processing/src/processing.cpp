@@ -3,6 +3,7 @@
 #include <cstdlib> 
 #include <ctime> 
 #include <std_msgs/String.h>
+#include <math.h>
 
 class Procesing {
 	protected:
@@ -46,27 +47,28 @@ class Procesing {
 			}
 		}
 
-		float o=(sin(firstAngle)*msg->ranges[firstAngle]-sin(secAngle)*msg->ranges[secAngle]); 
-		float a=(cos(firstAngle)*msg->ranges[firstAngle]-cos(secAngle)*msg->ranges[secAngle]);
+		float o=(sin((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]-sin((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]); 
+		float a=(cos((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]-cos((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]);
 		float d=(sqrt(pow(o,2)+pow(a,2)));
 		float wallAngle=1/sin(o/d);//esto creo que no esta bien
 
 		//Extraer los datos de interes
 
 		float minDistance=msg->range_max;
+		float detectableRange=0.18;
 		float frontUmbral=0.5;
 		float lateralUmbral=0.3;
 		float angleCurveUmbral=0.436332; //25º
 		int relAngle=360;
 
 		for(int i=0;i<=25;i++){
-			if(msg->ranges[i]<minDistance){
+			if(detectableRange<msg->ranges[i] && msg->ranges[i]<minDistance){
 				minDistance=msg->ranges[i];
 				relAngle=i;
 			}
 		}
 		for(int i=335;i<=358;i++){
-			if(msg->ranges[i]<minDistance){
+			if(detectableRange<msg->ranges[i] && msg->ranges[i]<minDistance){
 				minDistance=msg->ranges[i];
 				relAngle=i;
 			}
@@ -76,6 +78,9 @@ class Procesing {
 			
 		}
 
+
+		//Retocar condiciones de estado
+
 		if(minDistance<frontUmbral){//obstruccion delante, tiene que girar
 			ss<< "3";
 		}else if(wallAngle>angleCurveUmbral){
@@ -84,14 +89,15 @@ class Procesing {
 			ss<<"1";
 		}
 
-		ss<<":"<<msg->ranges[firstAngle]<<","<<msg->ranges[secAngle]<<":sqrt("<<o<<"²+"<<a<<"²)"<<"="<<d<<"<->"<<wallAngle<<":"<<minDistance;
-
+		ss<<":"<<wallAngle<<":"<<minDistance;
 
   	    msgInfo.data = ss.str();
 
 		chatter_pub.publish(msgInfo);
 
 		ROS_INFO("%s", msgInfo.data.c_str());
+		ROS_INFO_STREAM("\n"<<firstAngle<<"->"<<msg->ranges[firstAngle]<<","<<secAngle<<"->"<<msg->ranges[secAngle]<<"\nsqrt("<<o<<"²+"<<a<<"²)"<<"="<<d<<"\n");
+
 
 	};
 
