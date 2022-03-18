@@ -33,32 +33,33 @@ class Procesing {
 
 		//Obtiene el angulo de interseccion a la pared de la izquierda
 
-		int firstAngle=50;
-		int secAngle=51;
+		int firstAngle=50;//punto mas cercano al frente
+		int secAngle=51;//ultimo punto posible
 		bool first=false;
 
 		for(int i= 50;i<=100;i++){
 			if(!first&&msg->ranges[i]<=3.5){
 				first=true;
 				firstAngle=i;
+				secAngle=i+1;
 			}
 			if(first&&msg->ranges[i]<=3.5){
 				secAngle=i;
 			}
 		}
 
-		float o=(sin((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]-sin((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]); 
-		float a=(cos((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]-cos((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]);
-		float d=(sqrt(pow(o,2)+pow(a,2)));
-		float wallAngle=1/sin(o/d);//esto creo que no esta bien
+		double o=(sin((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]-sin((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]); 
+		double a=(cos((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]-cos((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]);
+		double d=(sqrt(pow(o,2)+pow(a,2)));
+		double wallAngle=asin(o/d);//genera un posible error de +-0.05 (aprox 3 grados de desvio)
 
 		//Extraer los datos de interes
 
-		float minDistance=msg->range_max;
-		float detectableRange=0.18;
-		float frontUmbral=0.5;
-		float lateralUmbral=0.3;
-		float angleCurveUmbral=0.436332; //25º
+		double minDistance=msg->range_max;
+		double detectableRange=0.18;
+		double frontUmbral=0.5;
+		double lateralUmbral=0.3;
+		double angleCurveUmbral=0.436332; //25º
 		int relAngle=360;
 
 		for(int i=0;i<=25;i++){
@@ -74,8 +75,9 @@ class Procesing {
 			}
 		}
 
-		if(msg->ranges[50]>3.5){
-			
+		if(!first){
+			ROS_INFO_STREAM("Posible ruta a la izquierda");
+			wallAngle=M_PI;			
 		}
 
 
@@ -83,7 +85,7 @@ class Procesing {
 
 		if(minDistance<frontUmbral){//obstruccion delante, tiene que girar
 			ss<< "3";
-		}else if(wallAngle>angleCurveUmbral){
+		}else if(wallAngle>angleCurveUmbral||wallAngle<(-1*angleCurveUmbral)){
 			ss<<"2";
 		}else{
 			ss<<"1";
@@ -96,7 +98,7 @@ class Procesing {
 		chatter_pub.publish(msgInfo);
 
 		ROS_INFO("%s", msgInfo.data.c_str());
-		ROS_INFO_STREAM("\n"<<firstAngle<<"->"<<msg->ranges[firstAngle]<<","<<secAngle<<"->"<<msg->ranges[secAngle]<<"\nsqrt("<<o<<"²+"<<a<<"²)"<<"="<<d<<"\n");
+		ROS_INFO_STREAM("Sensores empleados: ("<<firstAngle<<","<<secAngle<<","<<relAngle<<")\n");
 
 
 	};
