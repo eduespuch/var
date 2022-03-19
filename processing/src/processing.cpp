@@ -57,9 +57,9 @@ class Procesing {
 
 		double minDistance=msg->range_max;
 		double detectableRange=0.18;
-		double frontUmbral=0.5;
+		double frontUmbral=0.25;
 		double lateralUmbral=0.3;
-		double angleCurveUmbral=0.436332; //25º
+		double angleCurveUmbral=0.349066; //20º
 		int relAngle=360;
 
 		for(int i=0;i<=25;i++){

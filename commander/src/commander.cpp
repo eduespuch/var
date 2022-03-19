@@ -43,12 +43,12 @@ class Commander
 
 
                 case 2:
-                    base_cmd.angular.z = 0.5;
+                    base_cmd.angular.z = 0.45*angulo;
                     base_cmd.linear.x = 0.1;
                     break;
 
                 case 3:
-                    base_cmd.angular.z = 1.0;
+                    base_cmd.angular.z = 0.8*angulo;
                     base_cmd.linear.x = 0.1;
                     break;
 
