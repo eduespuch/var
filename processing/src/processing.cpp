@@ -12,11 +12,11 @@ class Procesing {
 	ros::Publisher chatter_pub;
 	ros::Subscriber laserSub;
 	double const frontUmbral=0.65;//vigilar la sensibilidad con la que hace el giro
-	double const shortLateralUmbral=0.3;//vigilar la sensibilidad con la que se le permite acercarse a la pared
-	double const largeLateralUmbral=2.8;//vigilar la sensibilidad con la que se le permite alejarse de la pared
+	double const shortLateralUmbral=0.45;//vigilar la sensibilidad con la que se le permite acercarse a la pared
+	double const largeLateralUmbral=0.55;//vigilar la sensibilidad con la que se le permite alejarse de la pared
 	double const angleCurveUmbral=0.349066; //20º sensibilidad de curva
-	double const angleTurnUmbral=0.610865;//35º sensibilidad de giro
-	double const detectableRange=0.14;//Para gestionar error que se genera con el lidar al moverse el robot
+	double const angleTurnUmbral=0.7;//40º sensibilidad de giro
+	double const detectableRange=0.15;//Para gestionar error que se genera con el lidar al moverse el robot
 	double const increaseFactor=1.2;//Factor para forzar a a giros/curvas mas intensas
 
 
@@ -125,7 +125,7 @@ class Procesing {
 				//se aleja pared, curva hacia ella (angulo*-1)
 			ss<<"2";
 
-			wallAngle=-wallAngle*increaseFactor;
+			wallAngle=sqrt(pow(wallAngle*increaseFactor,2));
 			ROS_INFO_STREAM("Caso curva de alejamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
 
 			
