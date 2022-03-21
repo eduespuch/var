@@ -38,18 +38,18 @@ class Commander
 
                 case 1:     //Ir recto
                     base_cmd.angular.z = 0.00;
-                    base_cmd.linear.x = 0.3;
+                    base_cmd.linear.x = 0.35;
                     break;
 
 
                 case 2:
                     base_cmd.angular.z = 0.45*angulo;
-                    base_cmd.linear.x = 0.1;
+                    base_cmd.linear.x = 0.15;
                     break;
 
                 case 3:
                     base_cmd.angular.z = 0.8*angulo;
-                    base_cmd.linear.x = 0.1;
+                    base_cmd.linear.x = 0.15;
                     break;
 
                 default:
