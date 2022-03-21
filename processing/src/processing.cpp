@@ -11,7 +11,7 @@ class Procesing {
 	ros::NodeHandle nh_;
 	ros::Publisher chatter_pub;
 	ros::Subscriber laserSub;
-	double const frontUmbral=0.65;//vigilar la sensibilidad con la que hace el giro
+	double const frontUmbral=0.7;//vigilar la sensibilidad con la que hace el giro
 	double const shortLateralUmbral=0.45;//vigilar la sensibilidad con la que se le permite acercarse a la pared
 	double const largeLateralUmbral=0.55;//vigilar la sensibilidad con la que se le permite alejarse de la pared
 	double const angleCurveUmbral=0.349066; //20º sensibilidad de curva

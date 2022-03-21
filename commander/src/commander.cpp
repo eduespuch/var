@@ -38,7 +38,7 @@ class Commander
 
                 case 1:     //Ir recto
                     base_cmd.angular.z = 0.00;
-                    base_cmd.linear.x = 0.35;
+                    base_cmd.linear.x = 0.25;
                     break;
 
 
