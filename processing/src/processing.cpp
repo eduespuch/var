@@ -97,17 +97,14 @@ class Procesing {
 
 		}else if(minDistanceFrontal<frontUmbral){//obstruccion delante, tiene que girar pero angulo de giro escaso
 			ss<< "3";
-			wallAngle=wallAngle>0?M_PI/2:-M_PI/2;//metodo temporal
+
+			if(minDistanceLateral<msg->ranges[270]){
+				wallAngle=M_PI/2*(-1);
+			}else{
+				wallAngle=M_PI/2;
+			}
+			
 			ROS_INFO_STREAM("Caso giro de colision. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
-
-
-			//Implementar este pseudocodigo mirando los parametros necesarios
-			//modificar angulo segun condiciones de la situacion
-			//si delante y a la izquierda parece estar bloqueado, ir a la derecha (minDistanceLateral<ranges[270], por ejemplo)
-				//wallAngle=M_PI/2*(-1);
-			//si no, a la izquierda se puede realizar un giro de 90º
-				//wallAngle=M_PI/2;
-
 
 		}else if(wallAngle>angleCurveUmbral||wallAngle<(-1*angleCurveUmbral)){//umbral curva leve
 			ss<<"2";
