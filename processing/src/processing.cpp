@@ -14,10 +14,10 @@ class Procesing {
 	double const frontUmbral=0.7;//vigilar la sensibilidad con la que hace el giro
 	double const shortLateralUmbral=0.45;//vigilar la sensibilidad con la que se le permite acercarse a la pared
 	double const largeLateralUmbral=0.55;//vigilar la sensibilidad con la que se le permite alejarse de la pared
-	double const angleCurveUmbral=0.349066; //20º sensibilidad de curva
-	double const angleTurnUmbral=0.7;//40º sensibilidad de giro
-	double const detectableRange=0.15;//Para gestionar error que se genera con el lidar al moverse el robot
-	double const increaseFactor=1.2;//Factor para forzar a a giros/curvas mas intensas
+	double const angleCurveUmbral=0.349066; //20grad sensibilidad de curva
+	double const angleTurnUmbral=0.785398;//45grad sensibilidad de giro
+	double const detectableRange=0.155;//Para gestionar error que se genera con el lidar al moverse el robot
+	double const increaseFactor=1.3;//Factor para forzar a a giros/curvas mas intensas
 
 
 
@@ -93,37 +93,37 @@ class Procesing {
 
 		if(wallAngle>angleTurnUmbral||wallAngle<(-1*angleTurnUmbral)){//umbral de giro alto
 			ss<< "3";
-			ROS_INFO_STREAM("Caso giro de umbral alto. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
+			ROS_INFO_STREAM("Caso giro de umbral alto. Realiza giro de: "<<wallAngle*180/M_PI<<"grad");
 
 		}else if(minDistanceFrontal<frontUmbral){//obstruccion delante, tiene que girar pero angulo de giro escaso
 			ss<< "3";
-
+			//wallAngle=wallAngle<0?M_PI/2*(-1):M_PI/2;
 			if(minDistanceLateral<msg->ranges[270]){
 				wallAngle=M_PI/2*(-1);
 			}else{
 				wallAngle=M_PI/2;
 			}
 			
-			ROS_INFO_STREAM("Caso giro de colision. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
+			ROS_INFO_STREAM("Caso giro de colision. Realiza giro de: "<<wallAngle*180/M_PI<<" grad. Distancia lateral de "<<minDistanceLateral);
 
 		}else if(wallAngle>angleCurveUmbral||wallAngle<(-1*angleCurveUmbral)){//umbral curva leve
 			ss<<"2";
-			ROS_INFO_STREAM("Caso curva de umbral leve. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
+			ROS_INFO_STREAM("Caso curva de umbral leve. Realiza giro de: "<<wallAngle*180/M_PI<<"grad");
 
 			
 		}else if(minDistanceLateral<shortLateralUmbral){//acercarse a la pared, curva hacia fuera (angulo)
 				//se aleja pared, curva hacia ella (angulo*-1)
 			ss<<"2";
-			wallAngle=wallAngle*increaseFactor;
-			ROS_INFO_STREAM("Caso curva de acercamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
+			wallAngle=wallAngle>0?wallAngle*(-1)*increaseFactor:wallAngle*increaseFactor;
+			ROS_INFO_STREAM("Caso curva de acercamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"grad. Distancia lateral de "<<minDistanceLateral);
 
 			
 		}else if(minDistanceLateral>largeLateralUmbral){//acercarse a la pared, curva hacia fuera (angulo)
 				//se aleja pared, curva hacia ella (angulo*-1)
 			ss<<"2";
 
-			wallAngle=sqrt(pow(wallAngle*increaseFactor,2));
-			ROS_INFO_STREAM("Caso curva de alejamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"º");
+			wallAngle=wallAngle<0?wallAngle*(-1)*increaseFactor:wallAngle*increaseFactor;
+			ROS_INFO_STREAM("Caso curva de alejamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"grad. Distancia lateral de "<<minDistanceLateral);
 
 			
 		}else{
