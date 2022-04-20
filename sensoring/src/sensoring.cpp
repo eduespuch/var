@@ -8,10 +8,14 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/fpfh.h>
+#include <pcl/registration/correspondence_estimation.h>
 
+
+//Definicion de atributos globales
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr visu_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr prev_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-
+//Viscualizacion a tiempo real de la extraccion de puntos
 void simpleVis ()
 {
   	pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
@@ -24,10 +28,26 @@ void simpleVis ()
     
 }
 
-void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud){
+//Estructura  general del algoritmo
+	//Extraccion de caracteristicas Ci de los datos xi (iteracion previamente almacenada)
+
+	//Extraccion de caracteristicas Ci+1 de los datos xi+1(iteracion actual obtenida por evento)
+
+	//Obtener emparejamiento entre caracteristicas, par de caracteristicas {c_a, c_b}
+
+	//RANSAC para obtener la mejor transformacion Ti que explique los emparejamientos
+
+	//Obtener la transformacion total
+
+	//Aplicar Ci+1 a la transofrmacion total y colocarlo en C1, acumular los datos transformados en M
+
+
+//metodos de uso general
+
+	//extraccion de descriptores
+void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors){
 
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);//Dataset de normales respecto a la nube de puntos.
-	pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors (new pcl::PointCloud<pcl::FPFHSignature33> ());//Dataset de descriptores respecto a la nube de puntos.
 
 	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;//Esto se usa para estimar las normales.
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>);
@@ -70,9 +90,24 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 	cout << "Puntos tras VG: " << cloud_filtered->size() << endl;
 
 	visu_pc = cloud_filtered;
+	
+	if(prev_pc->size()==0) prev_pc=cloud_filtered;
+	pcl::PointCloud<pcl::FPFHSignature33>::Ptr source_descriptors (new pcl::PointCloud<pcl::FPFHSignature33> ());//Dataset de descriptores respecto a la nube de puntos.
+	FPFH(prev_pc, source_descriptors);//Método 1 de cálculo de los descriptores.
 
-	FPFH(cloud_filtered);//Método 1 de cálculo de los descriptores.
+	pcl::PointCloud<pcl::FPFHSignature33>::Ptr tgt_descriptors (new pcl::PointCloud<pcl::FPFHSignature33> ());//Dataset de descriptores respecto a la nube de puntos.
+	FPFH(cloud_filtered, tgt_descriptors);//Método 1 de cálculo de los descriptores.
 
+	pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> est;
+	pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
+	est.setInputSource(source_descriptors);
+	est.setInputTarget(tgt_descriptors);
+	est.determineCorrespondences(*correspondences);
+
+	cout<< "Correspondencia entre descriptores por FPFH: "<<correspondences->size()<<endl;
+
+	prev_pc = cloud_filtered;
+	
 }
 
 int main(int argc, char** argv)
