@@ -9,6 +9,8 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/fpfh.h>
 #include <pcl/registration/correspondence_estimation.h>
+#include <pcl/registration/correspondence_rejection_sample_consensus.h>
+
 
 
 //Definicion de atributos globales
@@ -104,9 +106,33 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 	est.setInputTarget(tgt_descriptors);
 	est.determineCorrespondences(*correspondences);
 
-	cout<< "Correspondencia entre descriptores por FPFH: "<<correspondences->size()<<endl;
-
 	prev_pc = cloud_filtered;
+	
+
+	//-------------------------------RANSAC--------------------------------------------------
+	if(correspondences->size()==prev_pc->size()){
+
+		cout<< "Correspondencias antes de RANSAC: "<<correspondences->size()<<endl;
+
+		pcl::CorrespondencesPtr correspondences_filtered(new pcl::Correspondences());
+		pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> correspondence_rejector;
+
+		correspondence_rejector.setInputSource(prev_pc);
+		correspondence_rejector.setInputTarget(cloud_filtered);
+
+		correspondence_rejector.setInlierThreshold(0.2);
+		correspondence_rejector.setMaximumIterations(1000);
+		correspondence_rejector.setRefineModel(true);//false
+		correspondence_rejector.setInputCorrespondences(correspondences);
+
+		correspondence_rejector.getCorrespondences(*correspondences_filtered);
+		cout<<"Correspondencias despues de RANSAC: "<<correspondences_filtered->size()<<endl;
+
+	}{
+		cout<< "------------------------------Alerta: no puedo calcular RANSAC, no me pegues por favor...--------------"<<endl;
+	}
+	//-------------------------------------------------------------------------------------------------------
+
 	
 }
 
