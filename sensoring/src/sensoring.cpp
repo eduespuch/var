@@ -1,3 +1,4 @@
+#include <iostream>
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -10,12 +11,18 @@
 #include <pcl/features/fpfh.h>
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
+#include <pcl/keypoints/sift_keypoint.h>
+#include <pcl/keypoints/iss_3d.h>
+#include <pcl/search/kdtree.h>
+
+using namespace std;
 
 
 
 //Definicion de atributos globales
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr visu_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr prev_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr visu_keypoints (new pcl::PointCloud<pcl::PointXYZRGB>);
 
 //Viscualizacion a tiempo real de la extraccion de puntos
 void simpleVis ()
@@ -24,7 +31,10 @@ void simpleVis ()
 	
     while(!viewer.wasStopped())
 	{
-	  viewer.showCloud (visu_pc);
+		*visu_keypoints+=*visu_pc;
+	  viewer.showCloud(visu_keypoints);
+	  //boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+	  //viewer.showCloud (visu_pc);
 	  boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 	}
     
@@ -45,9 +55,80 @@ void simpleVis ()
 
 
 //metodos de uso general
+void SIFT(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints){
+
+	const float min_scale = stof("0.01");             // Establece la desviación estándar de la escala más pequeña en el espacio de la escala          
+	const int n_octaves = stof("6");               // Establecer el número de grupos de pirámides gaussianas (octava)            
+	const int n_scales_per_octave = stof("4");     // Establecer la escala del cálculo de cada grupo (octava)  
+	const float min_contrast = stof("0.01");          // Establecer umbral para limitar la detección de puntos clave       
+
+	pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointWithScale> sift;// Crear objeto de detección de punto clave de tamizado
+	pcl::PointCloud<pcl::PointWithScale> result;
+	sift.setInputCloud(cloud);// Establecer la nube de puntos de entrada
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB>());
+	sift.setSearchMethod(tree);// Cree un árbol de objetos de árbol kd vacío y páselo al objeto de detección de tamizado
+	sift.setScales(min_scale, n_octaves, n_scales_per_octave);// Especifique el rango de escala del punto clave de búsqueda
+	sift.setMinimumContrast(min_contrast);// Establecer umbral para limitar la detección de puntos clave
+	sift.compute(result);// Realice la detección de puntos clave de tamizado y guarde el resultado como resultado
+
+	copyPointCloud(result, *keypoints);// Convierta los datos del tipo de punto pcl :: PointWithScale a los datos del tipo de punto pcl :: PointXYZ
+	
+}
+
+double computeCloudResolution(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud){
+
+    double resolution = 0.0;
+    int numberOfPoints = 0;
+    int nres;
+    std::vector<int> indices(2);
+    std::vector<float> squaredDistances(2);
+    pcl::search::KdTree<pcl::PointXYZ> tree;
+    tree.setInputCloud(cloud);
+
+    for (size_t i = 0; i < cloud->size(); ++i)
+    {
+        if (!isfinite((*cloud)[i].x))
+            continue;
+
+        // Considering the second neighbor since the first is the point itself.
+        nres = tree.nearestKSearch(i, 2, indices, squaredDistances);
+        if (nres == 2)
+        {
+            resolution += sqrt(squaredDistances[1]);
+            ++numberOfPoints;
+        }
+    }
+    if (numberOfPoints != 0)
+        resolution /= numberOfPoints;
+
+    return resolution;
+}
+
+void compute_iss(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointCloud<pcl::PointXYZ>::Ptr keypoints){
+    
+    // calcular los puntos clave
+    pcl::ISSKeypoint3D<pcl::PointXYZ, pcl::PointXYZ> iss_det;
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+
+    // calcular la resolución
+    double model_resolution = computeCloudResolution(cloud);
+    
+    // Ajuste de parámetros públicos de ISS
+    iss_det.setMinNeighbors(10);
+    iss_det.setThreshold21(0.975);
+    iss_det.setThreshold32(0.975);
+    iss_det.setNumberOfThreads(4);
+
+    iss_det.setInputCloud(cloud);
+    iss_det.setSearchMethod(tree);
+    iss_det.setSalientRadius(6*model_resolution);  // 0.5
+    iss_det.setNonMaxRadius(4*model_resolution);
+    iss_det.compute(*keypoints);
+
+}
 
 	//extraccion de descriptores
-void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors){
+void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors){
 
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);//Dataset de normales respecto a la nube de puntos.
 
@@ -57,8 +138,8 @@ void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::FPF
 	pcl::FPFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh;//Esto se usa para calcular el descriptor de histograma.
 
 
-	normalEstimation.setInputCloud(cloud);//Prepara la nube de puntos capturados para extraer sus rectas normales.
-	fpfh.setInputCloud(cloud);//Prepara la nube de puntos para obtener sus descriptores, en base a la propia nube de puntos y al dataset de normales.
+	normalEstimation.setInputCloud(keypoints);//Prepara la nube de puntos capturados para extraer sus rectas normales.
+	fpfh.setInputCloud(keypoints);//Prepara la nube de puntos para obtener sus descriptores, en base a la propia nube de puntos y al dataset de normales.
 	
 	normalEstimation.setSearchMethod(kdtree);//La búsqueda la realizará fijándose en los n vecinos que encuentre en una esfera de radio r.
 	normalEstimation.setRadiusSearch(0.1);//Da valor al radio r.
@@ -90,6 +171,9 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 	vGrid.filter (*cloud_filtered);
 
 	cout << "Puntos tras VG: " << cloud_filtered->size() << endl;
+
+	SIFT(cloud_filtered,visu_keypoints);
+	cout<<"extraidos: "<<visu_keypoints->size()<<" keypoints."<<endl;
 
 	visu_pc = cloud_filtered;
 	
