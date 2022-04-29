@@ -61,13 +61,13 @@ void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::FPF
 	fpfh.setInputCloud(cloud);//Prepara la nube de puntos para obtener sus descriptores, en base a la propia nube de puntos y al dataset de normales.
 	
 	normalEstimation.setSearchMethod(kdtree);//La búsqueda la realizará fijándose en los n vecinos que encuentre en una esfera de radio r.
-	normalEstimation.setRadiusSearch(0.03);//Da valor al radio r.
+	normalEstimation.setRadiusSearch(0.1);//Da valor al radio r.
 	normalEstimation.compute(*normals);//Calcula las normales de la nube de puntos.
 
 	fpfh.setInputNormals(normals);//Una vez calculadas las normales, las podemos usar para obtener el histograma.
   
 	fpfh.setSearchMethod(kdtree);
-  	fpfh.setRadiusSearch(0.05);//Establece el radio de búsqueda (en metros) para los vecinos,el radio usado aquí debe ser mayor que el usado en el cálculo de las normales.
+  	fpfh.setRadiusSearch(0.1);//Establece el radio de búsqueda (en metros) para los vecinos,el radio usado aquí debe ser mayor que el usado en el cálculo de las normales.
 	fpfh.compute(*descriptors);
 
 	cout<<"Se han calculado: "<<descriptors->points.size()<<" descriptores."<<endl;
@@ -117,7 +117,7 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 		pcl::CorrespondencesPtr correspondences_filtered(new pcl::Correspondences());
 		pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> correspondence_rejector;
 
-		correspondence_rejector.setInputSource(prev_pc);
+		correspondence_rejector.setInputSource(prev_pc);//emplear keypoints como PC
 		correspondence_rejector.setInputTarget(cloud_filtered);
 
 		correspondence_rejector.setInlierThreshold(0.2);
@@ -127,6 +127,8 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 
 		correspondence_rejector.getCorrespondences(*correspondences_filtered);
 		cout<<"Correspondencias despues de RANSAC: "<<correspondences_filtered->size()<<endl;
+		Eigen::Matrix4f TPuto=correspondence_rejector.getBestTransformation();
+		cout<< TPuto<<endl;
 
 	}{
 		cout<< "------------------------------Alerta: no puedo calcular RANSAC, no me pegues por favor...--------------"<<endl;
