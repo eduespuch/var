@@ -1,161 +1,88 @@
-#include "ros/ros.h"
-#include "sensor_msgs/LaserScan.h"
-#include <cstdlib> 
-#include <ctime> 
-#include <std_msgs/String.h>
-#include <math.h>
+#include <iostream>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+#include <boost/thread/thread.hpp>
+#include <boost/foreach.hpp>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/common/io.h> // for concatenateFields
+#include <string>
 
-class Procesing {
-	protected:
-	//The node handle we'll be using
-	ros::NodeHandle nh_;
-	ros::Publisher chatter_pub;
-	ros::Subscriber laserSub;
-	double const frontUmbral=0.7;//vigilar la sensibilidad con la que hace el giro
-	double const shortLateralUmbral=0.45;//vigilar la sensibilidad con la que se le permite acercarse a la pared
-	double const largeLateralUmbral=0.55;//vigilar la sensibilidad con la que se le permite alejarse de la pared
-	double const angleCurveUmbral=0.349066; //20grad sensibilidad de curva
-	double const angleTurnUmbral=0.785398;//45grad sensibilidad de giro
-	double const detectableRange=0.155;//Para gestionar error que se genera con el lidar al moverse el robot
-	double const increaseFactor=1.3;//Factor para forzar a a giros/curvas mas intensas
+using namespace std;
 
 
+//Viscualizacion a tiempo real de la extraccion de puntos
+void simpleVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud){
+  	pcl::visualization::CloudViewer viewer ("Iterative Cloud Viewer");
+	
+    while(!viewer.wasStopped())
+	{
+		
+		
+	  viewer.showCloud(cloud);
+	  //boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+	  //viewer.showCloud (target_pc);
+	  boost::this_thread::sleep(boost::posix_time::milliseconds(2000));
+	}
+    
+}
 
-	public:
-	Procesing(ros::NodeHandle& nh) { 
-		// Suscribe el método commandCallback al tópico base_scan (el láser proporcionado por Stage)
-		// El método commandCallback será llamado cada vez que el emisor (stage) publique datos 
-		laserSub = nh.subscribe("scan", 1, &Procesing::commandCallback, this);
+int main(int argc, char** argv){
 
-		chatter_pub = nh.advertise<std_msgs::String>("info",1000);
-		nh_ = nh;
-	};
-
-	// Procesa los datos de láser
-	void commandCallback(const sensor_msgs::LaserScan::ConstPtr& msg) {
-
-		//parametros necesarios
-
-		std_msgs::String msgInfo;
-	    std::stringstream ss;
-		int firstAngle=50;//punto mas cercano al frente
-		int secAngle=51;//ultimo punto posible
-		bool first=false;//indica si se ha encontrado un punto al menos en el area de deteccion a la izquierda
-		double minDistanceFrontal=msg->range_max;
-		double minDistanceLateral=msg->range_max;
-		int relAngleFrontal=360;
-		int relAngleLateral=360;
-
-		//Obtiene el angulo de interseccion a la pared de la izquierda
-
-		for(int i= 50;i<=100;i++){
-			if(!first&&msg->ranges[i]<=3.5){
-				first=true;
-				firstAngle=i;
-				secAngle=i+1;
-			}
-			if(first&&msg->ranges[i]<=3.5){
-				secAngle=i;
-			}
-			if(detectableRange<msg->ranges[i] && msg->ranges[i]<minDistanceLateral){
-				minDistanceLateral=msg->ranges[i];
-				relAngleLateral=i;
-			}
-		}
-
-		double o=(sin((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]-sin((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]); 
-		double a=(cos((msg->range_max-secAngle)*M_PI/180)*msg->ranges[secAngle]-cos((msg->range_max-firstAngle)*M_PI/180)*msg->ranges[firstAngle]);
-		double d=(sqrt(pow(o,2)+pow(a,2)));
-		double wallAngle=asin(o/d);//genera un posible error de +-0.05 (aprox 3 grados de desvio)
-
-		//Extraer los datos de interes
-
-		for(int i=0;i<=25;i++){
-			if(detectableRange<msg->ranges[i] && msg->ranges[i]<minDistanceFrontal){
-				minDistanceFrontal=msg->ranges[i];
-				relAngleFrontal=i;
-			}
-		}
-		for(int i=335;i<=358;i++){
-			if(detectableRange<msg->ranges[i] && msg->ranges[i]<minDistanceFrontal){
-				minDistanceFrontal=msg->ranges[i];
-				relAngleFrontal=i;
-			}
-		}
-
-		if(!first){
-			ROS_INFO_STREAM("Posible ruta a la izquierda");
-			wallAngle=M_PI/2;			
-		}
+    //Inicializacion de variables (source y target point clouds, matriz tranformacion global, nube de puntos global)
+    /*
+    no se como pasar argumentos ya que no se donde se genera el ejecutable, habra que ajustarlo en cada prueba manualmente
+    */
 
 
-		//Retocar condiciones de estado
-
-		if(wallAngle>angleTurnUmbral||wallAngle<(-1*angleTurnUmbral)){//umbral de giro alto
-			ss<< "3";
-			ROS_INFO_STREAM("Caso giro de umbral alto. Realiza giro de: "<<wallAngle*180/M_PI<<"grad");
-
-		}else if(minDistanceFrontal<frontUmbral){//obstruccion delante, tiene que girar pero angulo de giro escaso
-			ss<< "3";
-			//wallAngle=wallAngle<0?M_PI/2*(-1):M_PI/2;
-			if(minDistanceLateral<msg->ranges[270]){
-				wallAngle=M_PI/2*(-1);
-			}else{
-				wallAngle=M_PI/2;
-			}
-			
-			ROS_INFO_STREAM("Caso giro de colision. Realiza giro de: "<<wallAngle*180/M_PI<<" grad. Distancia lateral de "<<minDistanceLateral);
-
-		}else if(wallAngle>angleCurveUmbral||wallAngle<(-1*angleCurveUmbral)){//umbral curva leve
-			ss<<"2";
-			ROS_INFO_STREAM("Caso curva de umbral leve. Realiza giro de: "<<wallAngle*180/M_PI<<"grad");
-
-			
-		}else if(minDistanceLateral<shortLateralUmbral){//acercarse a la pared, curva hacia fuera (angulo)
-				//se aleja pared, curva hacia ella (angulo*-1)
-			ss<<"2";
-			wallAngle=wallAngle>0?wallAngle*(-1)*increaseFactor:wallAngle*increaseFactor;
-			ROS_INFO_STREAM("Caso curva de acercamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"grad. Distancia lateral de "<<minDistanceLateral);
-
-			
-		}else if(minDistanceLateral>largeLateralUmbral){//acercarse a la pared, curva hacia fuera (angulo)
-				//se aleja pared, curva hacia ella (angulo*-1)
-			ss<<"2";
-
-			wallAngle=wallAngle<0?wallAngle*(-1)*increaseFactor:wallAngle*increaseFactor;
-			ROS_INFO_STREAM("Caso curva de alejamiento de pared. Realiza giro de: "<<wallAngle*180/M_PI<<"grad. Distancia lateral de "<<minDistanceLateral);
-
-			
-		}else{
-			ROS_INFO_STREAM("Caso recto. No realiza giro.");
-			ss<<"1";
-		}
-
-		ss<<":"<<wallAngle<<":"<<minDistanceFrontal;
-
-  	    msgInfo.data = ss.str();
-
-		chatter_pub.publish(msgInfo);
-
-		ROS_INFO("%s", msgInfo.data.c_str());
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr target_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr source_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr total_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+    //ls -a directorio >> fichero con todos los arcivhos del directorio dado
+    //ls -a directorio | wc -l cantidad de ficheros en el directorio
 
 
-	};
+    //abrir bucle, tantas iteraciones como muestras haya
+    for(int i=1;i<=81;i++){
+        if(pcl::io::loadPCDFile<pcl::PointXYZRGB>("src/data/test_09_05/"+to_string(i-1)+".pcd",*source_pc)==-1){
+            return -1;
+        }
+        cout<<"Cargando source de src/data/test_09_05/"<<to_string(i-1)<<".pcd con "<<source_pc->size()<<" puntos"<<endl;
+        //simpleVis(source_pc); //Si se lanza este metodo, para que cargue la siguiente nube de puntos se debe de cerrar el visualizador
 
-	// Bucle principal
-	void bucle() {
-		ros::Rate rate(1); // Especifica el tiempo de bucle en Hertzios. Ahora está en ciclo por segundo, pero normalmente usaremos un valor de 10 (un ciclo cada 100ms).
-		while (ros::ok()) { // Bucle que estaremos ejecutando hasta que paremos este nodo o el roscore pare.	
-			ros::spinOnce(); // Se procesarán todas las llamadas pendientes, es decir, llamará a callBack
-			rate.sleep(); // Espera a que finalice el ciclo
-		}
-	};
-};
+        if(pcl::io::loadPCDFile<pcl::PointXYZRGB>("src/data/test_09_05/"+to_string(i)+".pcd",*target_pc)==-1){
+            return -1;
+        }
+        cout<<"Cargando target de src/data/test_09_05/"<<to_string(i)<<".pcd con "<<target_pc->size()<<" puntos"<<endl;
 
-int main(int argc, char **argv) {
-	ros::init(argc, argv, "Processing"); // Inicializa un nuevo nodo llamado Procesing
-	ros::NodeHandle nh;
-	Procesing sf(nh); // Crea un objeto de esta clase y lo asocia con roscore
-	sf.bucle(); // Ejecuta el bucle
-	return 0;
-};
+        //extraer Ci y Ci+1 en iteracion i
+
+	//calcular keypoints de ambas muestras
+		/*
+		los keypoints son de tipo pc, usar 2 metodos diferenciados para extraccion de keypoints (SIFT y ISS)
+		*/
+
+	//obtener descriptores de ambas muestras, a raiz de los keypoints
+		/*
+		los descriptores son signature especificas al metodos(FPFHSignature y PFHSignature)
+		*/
+	//obtener correspondencias con los descripotres
+		/*
+		Un tipo correspondencia que se obtiene con un metodo con dos alternativas de argumentos,
+		cada alternativa en funcion al metodo de descriptores seleccionado
+		*/
+	//rechazar las malas correspondencias, utilizar los keypoints
+
+	//obtener la mejor transformacion
+
+		//calcular el fitness de la transformacion por aqui
+
+	//acumular la transformacion actual a la total
+
+	//concatenar el Ci+1 modificada por la transfomracion actual al mapa (nube de puntos global)
+	*total_pc=*source_pc;
+    *total_pc += *target_pc;
+        cout<<"Concatenacion de ambas nubes con "<<total_pc->size()<<" puntos en total"<<endl;
+	simpleVis(total_pc);
+    }
+}

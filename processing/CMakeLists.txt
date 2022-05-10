@@ -8,10 +8,9 @@ project(processing)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  nav_msgs
+  pcl_ros
+  pcl_conversions
   roscpp
-  sensor_msgs
-  std_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -71,7 +70,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
-#   nav_msgs#   sensor_msgs#   std_msgs
+#   std_msgs  # Or other packages containing msgs
 # )
 
 ################################################
@@ -106,7 +105,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES processing
-#  CATKIN_DEPENDS nav_msgs roscpp sensor_msgs std_msgs
+#  CATKIN_DEPENDS pcl pcl_conversions roscpp
 #  DEPENDS system_lib
 )
 
@@ -206,4 +205,6 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 add_executable(${PROJECT_NAME} src/processing.cpp)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} 
+${catkin_LIBRARIES}
+pcl_visualization)
