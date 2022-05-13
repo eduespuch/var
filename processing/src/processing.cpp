@@ -12,11 +12,18 @@
 #include <pcl/features/pfh.h>
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
+#include <pcl/registration/transforms.h>
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/search/kdtree.h>
 
 using namespace std;
+
+const float KeyPointRadius=0.0;
+const float DescriptorRadius=0.1;
+const float NormalRadius=0.1;
+const float InlierTreshold=0.15;
+const int RansacIter=3000;
 
 
 //Viscualizacion a tiempo real de la extraccion de puntos
@@ -85,6 +92,21 @@ void SIFT(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::Poin
 	
 }
 
+pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud){
+
+	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;//Esto se usa para estimar las normales.
+	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);//Dataset de normales respecto a la nube de puntos.
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>);
+
+	normalEstimation.setInputCloud(cloud);//Prepara la nube de puntos capturados para extraer sus rectas normales.
+	normalEstimation.setSearchMethod(kdtree);//La búsqueda la realizará fijándose en los n vecinos que encuentre en una esfera de radio r.
+	normalEstimation.setRadiusSearch(NormalRadius);//Da valor al radio r.
+	normalEstimation.compute(*normals);//Calcula las normales de la nube de puntos.
+
+	return normals;
+
+}
+
 double computeCloudResolution(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud){
 
     double resolution = 0.0;
@@ -138,48 +160,32 @@ void ISS(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::Point
 }
 
 //extraccion de descriptores
-void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors){
+void FPFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors){
 
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);//Dataset de normales respecto a la nube de puntos.
-
-	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;//Esto se usa para estimar las normales.
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>);
 
 	pcl::FPFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh;//Esto se usa para calcular el descriptor de histograma.
-
-
-	normalEstimation.setInputCloud(keypoints);//Prepara la nube de puntos capturados para extraer sus rectas normales.
 	fpfh.setInputCloud(keypoints);//Prepara la nube de puntos para obtener sus descriptores, en base a la propia nube de puntos y al dataset de normales.
-	
-	normalEstimation.setSearchMethod(kdtree);//La búsqueda la realizará fijándose en los n vecinos que encuentre en una esfera de radio r.
-	normalEstimation.setRadiusSearch(0.1);//Da valor al radio r.
-	normalEstimation.compute(*normals);//Calcula las normales de la nube de puntos.
-
-	fpfh.setInputNormals(normals);//Una vez calculadas las normales, las podemos usar para obtener el histograma.
+	fpfh.setSearchSurface(cloud);
+	fpfh.setInputNormals(computeNormals(cloud));//Una vez calculadas las normales, las podemos usar para obtener el histograma.
   
 	fpfh.setSearchMethod(kdtree);
-  	fpfh.setRadiusSearch(0.1);//Establece el radio de búsqueda (en metros) para los vecinos,el radio usado aquí debe ser mayor que el usado en el cálculo de las normales.
+  	fpfh.setRadiusSearch(DescriptorRadius);//Establece el radio de búsqueda (en metros) para los vecinos,el radio usado aquí debe ser mayor que el usado en el cálculo de las normales.
 	fpfh.compute(*descriptors);
-
 
 }
 
-void PFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::PFHSignature125>::Ptr descriptors){
+void PFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::PFHSignature125>::Ptr descriptors){
 	
 	// Create the PFH estimation class, and pass the input dataset+normals to it
-	pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal> ());
+	
 	pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125> pfh;
-	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> normalEstimation;//Esto se usa para estimar las normales.
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree (new pcl::search::KdTree<pcl::PointXYZRGB> ());
 
-
-	normalEstimation.setInputCloud(keypoints);//Prepara la nube de puntos capturados para extraer sus rectas normales.
-	normalEstimation.setSearchMethod(kdtree);//La búsqueda la realizará fijándose en los n vecinos que encuentre en una esfera de radio r.
-	normalEstimation.setRadiusSearch(0.1);//Da valor al radio r.
-	normalEstimation.compute(*normals);//Calcula las normales de la nube de puntos.
-
 	pfh.setInputCloud (keypoints);
-	pfh.setInputNormals (normals);
+	pfh.setSearchSurface(cloud);
+	pfh.setInputNormals (computeNormals(cloud));
 	
 	// Create an empty kdtree representation, and pass it to the PFH estimation object.
 	// Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
@@ -188,7 +194,7 @@ void PFH(pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints, pcl::PointCloud<pcl::
 
 	// Use all neighbors in a sphere of radius 10cm
 	// IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
-	pfh.setRadiusSearch (0.1);
+	pfh.setRadiusSearch (DescriptorRadius);
 
 	// Compute the features
 	pfh.compute (*descriptors);
@@ -205,9 +211,11 @@ int main(int argc, char** argv){
 	int totalSamples=getTotalSamples(dir);
 	bool sift=true;
 	bool fpfh=false;
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr target_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr source_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr total_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+	Eigen::Matrix4f total_Matrix=Eigen::Matrix4f::Identity ();
 
 	if(pcl::io::loadPCDFile<pcl::PointXYZRGB>(dir+"/0.pcd",*total_pc)==-1){
 		return -1;
@@ -250,10 +258,10 @@ int main(int argc, char** argv){
 	//obtener descriptores de ambas muestras, a raiz de los keypoints
 	if(fpfh){
 		pcl::PointCloud<pcl::FPFHSignature33>::Ptr source_descriptors (new pcl::PointCloud<pcl::FPFHSignature33> ());//Dataset de descriptores respecto a la nube de puntos.
-		FPFH(source_kp, source_descriptors);//Método 1 de cálculo de los descriptores.
+		FPFH(source_pc,source_kp, source_descriptors);//Método 1 de cálculo de los descriptores.
 		cout<<"Se han calculado: "<<source_descriptors->points.size()<<" descriptores para el source."<<endl;
 		pcl::PointCloud<pcl::FPFHSignature33>::Ptr tgt_descriptors (new pcl::PointCloud<pcl::FPFHSignature33> ());//Dataset de descriptores respecto a la nube de puntos.
-		FPFH(target_kp, tgt_descriptors);//Método 1 de cálculo de los descriptores.
+		FPFH(target_pc,target_kp, tgt_descriptors);//Método 1 de cálculo de los descriptores.
 		
 		cout<<"Se han calculado: "<<tgt_descriptors->points.size()<<" descriptores para el target."<<endl;
 		pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> est;
@@ -262,10 +270,10 @@ int main(int argc, char** argv){
 		est.determineCorrespondences(*correspondences);
 	}else{//si hace pfh
 		pcl::PointCloud<pcl::PFHSignature125>::Ptr source_descriptors (new pcl::PointCloud<pcl::PFHSignature125> ());//Dataset de descriptores respecto a la nube de puntos.
-		PFH(source_kp, source_descriptors);//Método 1 de cálculo de los descriptores.
+		PFH(source_pc,source_kp, source_descriptors);//Método 1 de cálculo de los descriptores.
 		cout<<"Se han calculado: "<<source_descriptors->points.size()<<" descriptores para el source."<<endl;
 		pcl::PointCloud<pcl::PFHSignature125>::Ptr tgt_descriptors (new pcl::PointCloud<pcl::PFHSignature125> ());//Dataset de descriptores respecto a la nube de puntos.
-		PFH(target_kp, tgt_descriptors);//Método 1 de cálculo de los descriptores.
+		PFH(target_pc,target_kp, tgt_descriptors);//Método 1 de cálculo de los descriptores.
 		cout<<"Se han calculado: "<<tgt_descriptors->points.size()<<" descriptores para el target."<<endl;
 		
 		pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> est;
@@ -294,25 +302,25 @@ int main(int argc, char** argv){
 	correspondence_rejector.setInputSource(source_kp);//emplear keypoints como PC
 	correspondence_rejector.setInputTarget(target_kp);
 
-	correspondence_rejector.setInlierThreshold(0.2);
-	correspondence_rejector.setMaximumIterations(1000);
+	correspondence_rejector.setInlierThreshold(InlierTreshold);
+	correspondence_rejector.setMaximumIterations(RansacIter);
 	correspondence_rejector.setRefineModel(true);//false
 	correspondence_rejector.setInputCorrespondences(correspondences);
 
 	correspondence_rejector.getCorrespondences(*correspondences_filtered);
 	cout<<"Correspondencias despues de RANSAC: "<<correspondences_filtered->size()<<endl;
-	Eigen::Matrix4f TPuto=correspondence_rejector.getBestTransformation();
-	cout<< TPuto<<endl;
+	Eigen::Matrix4f parcial_Matrix=correspondence_rejector.getBestTransformation();//obtenemos la mejor transformacion
+	cout<< total_Matrix<<endl;
 	//-------------------------------------------------------------------------------------------------------
 
-	//obtener la mejor transformacion
-
+	
 		//calcular el fitness de la transformacion por aqui
 
 	//acumular la transformacion actual a la total
-
+	total_Matrix*=parcial_Matrix;
+	pcl::transformPointCloud(*target_pc,*source_pc,total_Matrix);
 	//concatenar el Ci+1 modificada por la transfomracion actual al mapa (nube de puntos global)
-    *total_pc += *target_pc;
+    *total_pc += *source_pc;
         cout<<"Concatenacion de ambas nubes con "<<total_pc->size()<<" puntos en total"<<endl;
     }
 	
