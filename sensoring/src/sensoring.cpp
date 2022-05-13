@@ -34,14 +34,14 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 
 	pcl::VoxelGrid<pcl::PointXYZRGB > vGrid;
 	vGrid.setInputCloud (cloud);
-	vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+	vGrid.setLeafSize (0.01f, 0.01f, 0.01f);
 	vGrid.filter (*cloud_filtered);
 
 	cout << "Puntos tras VG: " << cloud_filtered->size() << endl;
 
 	visu_pc = cloud_filtered;
-	pcl::io::savePCDFileASCII ("src/data/test_04_05_"+to_string(contador)+".pcd", *visu_pc);
-	std::cerr << "Saved " << visu_pc->size() << " data points to "<<"test_04_05_"<<to_string(contador)<<".pcd"<< std::endl;
+	pcl::io::savePCDFileASCII ("src/data/test_13_05/"+to_string(contador)+".pcd", *visu_pc);
+	std::cerr << "Saved " << visu_pc->size() << " data points to "<<"src/data/test_13_05/"<<to_string(contador)<<".pcd"<< std::endl;
 	contador++;
 
 
