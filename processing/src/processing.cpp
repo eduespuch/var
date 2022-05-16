@@ -107,6 +107,8 @@
 
 		#define PointType pcl::PointXYZRGB
 
+		#define DEBUG_MSG 0
+
 		using namespace std;
 	
 //Auxiliar methods
@@ -125,17 +127,17 @@ bool loadPointClouds(const string& dir, const int iter,
 						pcl::PointCloud<PointType>::Ptr last_pc,
 						pcl::PointCloud<PointType>::Ptr actual_pc){
 
-	cout<<"\tReading "<<dir<<"/"<<to_string(iter-1)<<".pcd\n";
 	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter-1)+".pcd",*last_pc)==-1){
 		return false;
 	}
-	cout<<"\tLoaded last point cloud from "<<dir<<"/"<<to_string(iter-1)<<".pcd with "<<last_pc->size()<<" points\n";
-	
-	cout<<"\tReading "<<dir<<"/"<<to_string(iter)<<".pcd\n";
 	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter)+".pcd",*actual_pc)==-1){
 		return false;
 	}
-	cout<<"\tLoadad actual point cloud from "<<dir<<"/"<<to_string(iter)<<".pcd with "<<actual_pc->size()<<" points\n";
+
+	#if DEBUG_MSG==1
+		cout<<"\tLoaded last point cloud from "<<dir<<"/"<<to_string(iter-1)<<".pcd with "<<last_pc->size()<<" points\n";
+		cout<<"\tLoadad actual point cloud from "<<dir<<"/"<<to_string(iter)<<".pcd with "<<actual_pc->size()<<" points\n";
+	#endif
 	return true;
 }
 
@@ -208,8 +210,10 @@ void transform_cloud(const Eigen::Matrix4f &transform, Eigen::Matrix4f &transfor
 	transform_total *= transform;
 	pcl::transformPointCloud(*cloud, *transformedCloud, transform_total);
 
-	cout << "\tTActualTransform matrix: \n" << transform << "\n";
-	cout << "\tTransformTotal matrix: \n" << transform_total << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tTActualTransform matrix: \n" << transform << "\n";
+		cout << "\tTransformTotal matrix: \n" << transform_total << "\n";
+	#endif
 }
 
 /**
@@ -256,7 +260,9 @@ void filter_voxel_grid(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	v_grid.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
 	v_grid.filter(*cloud_filtered);
 
-	cout << "\tNumber of points after VoxelGrid: " << cloud_filtered->size() << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of points after VoxelGrid: " << cloud_filtered->size() << "\n";
+	#endif
 
 }
 
@@ -277,7 +283,10 @@ void estimate_normals(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	ne.setRadiusSearch(NORMALS_RADIUS_SEARCH);
 	ne.compute(*normals);
 
-	cout << "\tNumber of normal estimated: " << normals->size() << "\n";
+	
+	#if DEBUG_MSG==1
+		cout << "\tNumber of normal estimated: " << normals->size() << "\n";
+	#endif
 
 }
 
@@ -365,9 +374,10 @@ void iss_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	iss_detector.setSalientRadius(ISS_SALIENT_RADIUS*actual_res);
 	iss_detector.setNonMaxRadius(ISS_NON_MAX_RADIUS*actual_res);
 	iss_detector.compute(*keypoints);
-
-
-	cout << "\tNumber of keypoints with IIS detector: " << keypoints->size() << "\n";
+	
+	#if DEBUG_MSG==1
+		cout << "\tNumber of keypoints with ISS detector: " << keypoints->size() << "\n";
+	#endif
 }
 
 /**
@@ -388,8 +398,10 @@ void sift_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	sift.setInputCloud(cloud);
 	sift.compute(result);
 	copyPointCloud(result, *keypoints);
-
-	cout << "\tNumber of keypoints with SIFT detector: " << keypoints->size() << "\n";
+	
+	#if DEBUG_MSG==1
+		cout << "\tNumber of keypoints with SIFT detector: " << keypoints->size() << "\n";
+	#endif
 }
 
 /**
@@ -408,7 +420,9 @@ void harris_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	detector.compute(*result);
 	copyPointCloud(*result, *keypoints);
 	
-	cout << "\tNumber of keypoints with HARRIS detector: " << keypoints->size() << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of keypoints with HARRIS detector: " << keypoints->size() << "\n";
+	#endif
 }
 //Descriptors definition methods
 
@@ -434,7 +448,9 @@ void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 	shot.setSearchSurface(cloud);
 	shot.compute(*descriptors);
 
-	cout << "\tNumber of descriptors with SHOT352: " << descriptors->size() << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of descriptors with SHOT352: " << descriptors->size() << "\n";
+	#endif
 }
 
 /**
@@ -457,7 +473,9 @@ void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 	fpfh.setRadiusSearch(FPFH_RADIUS_SEARCH);
 	fpfh.compute(*descriptors);
 
-	cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
+	#endif
 }
 
 /**
@@ -488,7 +506,9 @@ void CVFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
  
 	cvfh.compute(*descriptors);	
 
-	cout << "\tNumber of descriptors with CVFH: " << descriptors->size() << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of descriptors with CVFH: " << descriptors->size() << "\n";
+	#endif
 }
 
 //Correspondences methods
@@ -549,8 +569,10 @@ void iterative_closest_point(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	if(icp.hasConverged())
 		transformation = icp.getFinalTransformation();
 
-	cout << "\tICP Score: " << icp.getFitnessScore() << "\n";
-	cout << "\tICP matrix transformation: \n" << transformation << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tICP Score: " << icp.getFitnessScore() << "\n";
+		cout << "\tICP matrix transformation: \n" << transformation << "\n";
+	#endif
 }
 
 /**
@@ -582,9 +604,11 @@ void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
 	crsc.getCorrespondences(*bestCorrespondences);
 	transformation = crsc.getBestTransformation();
 	
-	cout << "\tNumber of estimation correspondences: " << estimateCorrespondences->size() << "\n";
-	cout << "\tNumber of remaining correspondences: " << bestCorrespondences->size() << "\n";
-	cout << "\tMatrix transformation: \n" << transformation << "\n";
+	#if DEBUG_MSG==1
+		cout << "\tNumber of estimation correspondences: " << estimateCorrespondences->size() << "\n";
+		cout << "\tNumber of remaining correspondences: " << bestCorrespondences->size() << "\n";
+		cout << "\tMatrix transformation: \n" << transformation << "\n";
+	#endif
 
 }
 
@@ -620,11 +644,15 @@ void ransac_transform(const pcl::PointCloud<PointType>::ConstPtr &cloud,
     crsc->setInputCorrespondences(bestCorrespondences);
 	transform = crsc->getBestTransformation();
 
-	cout << "\tBest transform matrix: " << "\n" << transform << "\n";
 
 	transform_cloud(transform,transform_total, cloud, transformedCloud);
 	//pcl::transformPointCloud(*keypoints, *transformedCloud, transformTotal);
-	cout << "\tSize of transformed cloud: " << transformedCloud->size() << "\n";
+
+			
+	#if DEBUG_MSG==1
+		cout << "\tBest transform matrix: " << "\n" << transform << "\n";
+		cout << "\tSize of transformed cloud: " << transformedCloud->size() << "\n";
+	#endif	
 }
 
 
@@ -642,7 +670,7 @@ int main(int argc, char** argv){
 	Eigen::Matrix4f transform_total=Eigen::Matrix4f::Identity ();
 
 	//Obtain all the samples
-	int totalSamples=200;//getTotalSamples(DIRECTORY);
+	int totalSamples=45;//getTotalSamples(DIRECTORY);
 	cout<<DIRECTORY<< " has a total of "<<totalSamples<<" samples to build a map\n";
 	//Start loop for all the samples captured
 	for(int i = 1; i<totalSamples;i++){
@@ -658,7 +686,7 @@ int main(int argc, char** argv){
 				cout<<" ";
 			}
 		}
-		cout<<"]\n\n";
+		cout<<"]\t"<<100/totalSamples*i<<"%\n\n";
 		//TODO Error, core dumped, no tiene sentido porque esto ya funcionaba. El error pasa con la lectura del pcffile
 		if(!loadPointClouds(DIRECTORY, i, last_pc, actual_pc)){
 			cerr<<" A file couldn't be read \n";
@@ -667,12 +695,18 @@ int main(int argc, char** argv){
 
 		//Info last point cloud
 		double last_res = get_cloud_resolution(last_pc);
-		cout<<"Previous point cloud processing: \n\tResolution of point cloud: "<<last_res<<"\n";
+
+		#if DEBUG_MSG==1
+			cout<<"Previous point cloud processing: \n\tResolution of point cloud: "<<last_res<<"\n";
+		#endif	
 		pcl::PointCloud<pcl::Normal>::Ptr last_normals(new pcl::PointCloud<pcl::Normal>);
 		estimate_normals(last_pc, last_normals);
 		//Info actual point cloud
 		double actual_res = get_cloud_resolution(actual_pc);
-		cout<<"Actual point cloud processing: \n\tResolution of point cloud: "<<actual_res<<"\n";
+
+		#if DEBUG_MSG==1
+			cout<<"Actual point cloud processing: \n\tResolution of point cloud: "<<actual_res<<"\n";
+		#endif	
 		pcl::PointCloud<pcl::Normal>::Ptr actual_normals(new pcl::PointCloud<pcl::Normal>);
 		estimate_normals(actual_pc, actual_normals);
 		
@@ -689,19 +723,43 @@ int main(int argc, char** argv){
 		pcl::PointCloud<PointType>::Ptr actual_kp(new pcl::PointCloud<PointType>());
 		
 		#if KeypointsMethod	== 1
-			cout<<"Last point cloud keypoints info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud keypoints info: \n";
+			#endif
+
+			
 			sift_keypoints(last_pc, last_kp);
-			cout<<"Actual point cloud keypoints info: \n";
+
+			#if DEBUG_MSG==1
+				cout<<"Actual point cloud keypoints info: \n";
+			#endif
+
 			sift_keypoints(actual_pc, actual_kp);
 		#elif KeypointsMethod == 2
-			cout<<"Last point cloud keypoints info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud keypoints info: \n";
+			#endif
+
+			
+			
 			iss_keypoints(last_pc, last_res, last_kp);
 			cout<<"Actual point cloud keypoints info: \n";
 			iss_keypoints(actual_pc, actual_res, actual_kp);
 		#elif KeypointsMethod == 3
-			cout<<"Last point cloud keypoints info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud keypoints info: \n";
+			#endif
+			
 			harris_keypoints(last_pc, last_kp);
-			cout<<"Actual point cloud keypoints info: \n";
+
+			#if DEBUG_MSG==1
+				cout<<"Actual point cloud keypoints info: \n";
+			#endif
+
+			
 			harris_keypoints(actual_pc, actual_kp);
 		#endif
 			//complexVis(actual_pc, actual_kp, actual_normals);
@@ -712,19 +770,43 @@ int main(int argc, char** argv){
 			pcl::PointCloud<DescriptorType>::Ptr actual_dc(new pcl::PointCloud<DescriptorType>());
 
 		#if DescriptorsMethod == 1
-			cout<<"Last point cloud descriptors info: \n";
-			FPFH_descriptors(last_kp, last_dc);
-			cout<<"Actual point cloud descriptors info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud descriptors info: \n";
+			#endif
+			
+			FPFH_descriptors(last_kp, last_dc);	
+
+			#if DEBUG_MSG==1
+				cout<<"Actual point cloud descriptors info: \n";
+			#endif
+
 			FPFH_descriptors(actual_kp, actual_dc);
 		#elif DescriptorsMethod == 2
-			cout<<"Last point cloud descriptors info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud descriptors info: \n";
+			#endif
+
 			CVFH_descriptors(last_kp, last_dc);	
-			cout<<"Actual point cloud descriptors info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Actual point cloud descriptors info: \n";
+			#endif
+
 			CVFH_descriptors(actual_kp, actual_dc);	
 		#elif DescriptorsMethod == 3
-			cout<<"Last point cloud descriptors info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Last point cloud descriptors info: \n";
+			#endif
+
 			SHOT352_descriptors(last_kp, last_pc, last_dc);
-			cout<<"Actual point cloud descriptors info: \n";
+			
+			#if DEBUG_MSG==1
+				cout<<"Actual point cloud descriptors info: \n";
+			#endif
+
 			SHOT352_descriptors(actual_kp, actual_pc, actual_dc);
 		#endif
 
@@ -747,5 +829,16 @@ int main(int argc, char** argv){
 
 		*map_pc += *cloud_filtered;
 	}
+	system("clear");
+	cout<<"\n Iteration of the loop number "<<totalSamples<<"\n";
+	//por quedar bonito
+	cout<<"Process: [";
+	for(int j=0;j<20;j++){
+		cout<<"#";
+	}
+	cout<<"]\t100% completed\n\n";
+	cout<< "Map generated with "<<map_pc->size()<<" points in total\nSaving in \"src/mapa.pcd\"\n";
+	pcl::io::savePCDFileASCII ("src/mapa.pcd", *map_pc);
+	cout<< "Showing map generated\n";
 	simpleVis(map_pc);
 }
