@@ -10,10 +10,19 @@
 #include <string>
 #include <iostream>
 
+#define LEAF_SIZE 0.05f
+
+#define DIRECTORY "src/data"
+
+#define FOLDER "LS05_1"
+
 using namespace std;
+
+
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr visu_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
 int contador=0;
+
 void simpleVis ()
 {
   	pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
@@ -29,19 +38,22 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 {
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-
+	string dir=DIRECTORY;
+	dir+="/";
+	dir+=FOLDER;
+	dir+="/";
 	cout << "Puntos capturados: " << cloud->size() << endl;
 
 	pcl::VoxelGrid<pcl::PointXYZRGB > vGrid;
 	vGrid.setInputCloud (cloud);
-	vGrid.setLeafSize (0.01f, 0.01f, 0.01f);
+	vGrid.setLeafSize (LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
 	vGrid.filter (*cloud_filtered);
 
 	cout << "Puntos tras VG: " << cloud_filtered->size() << endl;
 
 	visu_pc = cloud_filtered;
-	pcl::io::savePCDFileASCII ("src/data/test_13_05/"+to_string(contador)+".pcd", *visu_pc);
-	std::cerr << "Saved " << visu_pc->size() << " data points to "<<"src/data/test_13_05/"<<to_string(contador)<<".pcd"<< std::endl;
+	pcl::io::savePCDFileASCII (dir+to_string(contador)+".pcd", *visu_pc);
+	std::cerr << "Saved " << visu_pc->size() << " data points to "<<dir<<to_string(contador)<<".pcd"<< std::endl;
 	contador++;
 
 
