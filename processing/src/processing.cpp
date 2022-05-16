@@ -52,13 +52,16 @@
 		3- HARRIS			| 3- SHOT
 		*/
 		#define KeypointsMethod 1
-		#define DescriptorsMethod 1
+		#define DescriptorsMethod 2
 
 		//Selected descriptor type must me same type of descriptor method
-
-		#define DescriptorType pcl::FPFHSignature33 // 1 == FPFH
-		//#define DescriptorType pcl::VFHSignature308 // 2 == CVFH
-		//#define DescriptorType pcl::SHOT352 // 3 == SHOT352
+		#if DescriptorsMethod==1// 1 == FPFH
+			#define DescriptorType pcl::FPFHSignature33 
+		#elif DescriptorsMethod==2// 2 == CVFH
+			#define DescriptorType pcl::VFHSignature308 
+		#elif DescriptorsMethod==3// 3 == SHOT352
+			#define DescriptorType pcl::SHOT352 
+		#endif
 	//Keypoints configuration
 
 		//SIFT PARAMETERS
@@ -107,7 +110,7 @@
 
 		#define PointType pcl::PointXYZRGB
 
-		#define DEBUG_MSG 0
+		#define DEBUG_MSG 1
 
 		using namespace std;
 	
