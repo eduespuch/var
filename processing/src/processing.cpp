@@ -57,8 +57,7 @@
 		/*
 		Keypoints methods	| Descriptors methods
 		1- SIFT				| 1- FPFH
-		2- ISS				| 2- CVFH
-		3- HARRIS			| 3- SHOT
+		2- ISS				| 2- SHOT
 		*/
 		#define KeypointsMethod 1
 		#define DescriptorsMethod 1
@@ -66,9 +65,7 @@
 		//Selected descriptor type must me same type of descriptor method
 		#if DescriptorsMethod==1// 1 == FPFH
 			#define DescriptorType pcl::FPFHSignature33 
-		#elif DescriptorsMethod==2// 2 == CVFH
-			#define DescriptorType pcl::VFHSignature308 
-		#elif DescriptorsMethod==3// 3 == SHOT352
+		#elif DescriptorsMethod==2// 2 == SHOT352
 			#define DescriptorType pcl::SHOT352 
 		#endif
 	//Keypoints configuration
@@ -87,22 +84,13 @@
 		#define ISS_32_THRESHOLD 0.975
 
 
-		//HARRIS PARAMETERS
-		#define HARRIS_NON_MAX_SUPRESSION true
-		#define HARRIS_THRESHOLD 1e-9
-
 	//Descriptors configuration
 
 		// FPFH PARAMETERS
-		#define FPFH_RADIUS_SEARCH 0.015
+		#define FPFH_RADIUS_SEARCH 0.03
 
 		// SHOT352 PARAMETERS
 		#define SHOT352_RADIUS_SEARCH 0.05
-
-		// CVFH PARAMETERS
-		#define CVFH_EPS_ANGLE_THRESHOLD 5.0 / 180.0 * M_PI
-		#define CVFH_CURVATURE_THRESHOLD 1.0
-		#define CVFH_NORMALIZE_BINS false
 	//Correspondeces configuration
 		#define RANSAC_MAX_ITERATIONS 3000
 		#define RANSAC_INLIER_THRESHOLD 0.05
@@ -125,7 +113,7 @@
 
 		#define DEBUG_VIS 0
 
-		#define Method_Test 1
+		#define Method_Test 0
 
 		#define RANSACMethod 1
 
@@ -203,6 +191,7 @@ class MyPointRepresentation : public pcl::PointRepresentation <PointNormalT>{
  * @param totalIter total iteration
  */
 void processBar(int iter, int totalIter){
+	//system("sleep 3");
 	system("clear");
 	cout<<"\n Iteration of the loop number "<<iter<<"\n";
 	//por quedar bonito
@@ -298,6 +287,7 @@ void complexVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl
    viewer.addPointCloud(keypoints, "keypoints");      
    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,8, "keypoints");
    viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0, 0.0, 1, "keypoints");
+   //muestra una normal de 10 con una distancia de 5cm
    viewer.addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
     while (!viewer.wasStopped())
    {      
@@ -323,11 +313,11 @@ void complexVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl
 void loadData(const string& dir, const int totalSamples, vector<PCD, Eigen::aligned_allocator<PCD> > &models){
   string extension (".pcd");
   // Suppose the first argument is the actual test model
-  for (int i = 1; i < totalSamples; i++){
+  for (int i = 0; i < totalSamples; i++){
 
       // Load the cloud and saves it into the global list of models
       PCD m;
-      m.f_name = dir+"/"+to_string(i-1)+".pcd";
+      m.f_name = dir+"/"+to_string(i)+".pcd";
       pcl::io::loadPCDFile (m.f_name, *m.cloud);
       //remove NAN points from the cloud
       vector<int> indices;
@@ -338,29 +328,23 @@ void loadData(const string& dir, const int totalSamples, vector<PCD, Eigen::alig
 }
 
 /**
- * @brief Loads the source and target point clouds from a specific directory for a given iteration on the loop
- * @deprecated use loadData instead
+ * @brief Loads a specific point cloud
+ * 
  * @param dir directory with samples
  * @param iter actual iteration
- * @param source source point cloud, already on the map
- * @param target target point cloud, soon to be added on the map
+ * @param cloud point cloud with the result
  * @return true pcd files are loaded
  * @return false pcd files aren't loaded
  */
 bool loadPointClouds(const string& dir, const int iter, 
-						pcl::PointCloud<PointType>::Ptr source,
-						pcl::PointCloud<PointType>::Ptr target){
+						pcl::PointCloud<PointType>::Ptr cloud){
 
-	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter-1)+".pcd",*source)==-1){
-		return false;
-	}
-	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter)+".pcd",*target)==-1){
+	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter)+".pcd",*cloud)==-1){
 		return false;
 	}
 
 	#if DEBUG_MSG==1
-		cout<<"\tLoaded last point cloud from "<<dir<<"/"<<to_string(iter-1)<<".pcd with "<<source->size()<<" points\n";
-		cout<<"\tLoadad actual point cloud from "<<dir<<"/"<<to_string(iter)<<".pcd with "<<target->size()<<" points\n";
+		cout<<"\tLoadad actual point cloud from "<<dir<<"/"<<to_string(iter)<<".pcd with "<<cloud->size()<<" points\n";
 	#endif
 	return true;
 }
@@ -435,7 +419,6 @@ void transform_cloud(const Eigen::Matrix4f &transform, Eigen::Matrix4f &transfor
 	pcl::transformPointCloud(*cloud, *transformedCloud, transform_total);
 
 	#if DEBUG_MSG==1
-		cout << "\tTActualTransform matrix: \n" << transform << "\n";
 		cout << "\tTransformTotal matrix: \n" << transform_total << "\n";
 	#endif
 }
@@ -478,7 +461,7 @@ void estimate_normals(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	//radio de vecinos
 	ne.setRadiusSearch(NORMALS_RADIUS_SEARCH);
 	//numero de vecinos
-	ne.setKSearch(NORMALS_K_NEIGHBORS);
+	//ne.setKSearch(NORMALS_K_NEIGHBORS);
 
 	ne.compute(*normals);
 
@@ -593,28 +576,7 @@ void sift_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	#endif
 }
 
-/**
- * @brief Obtains the keypoints of cloud point using HARRISKeypoint3D
- * 
- * @param cloud inpunt point cloud
- * @param keypoints output point cloud, referencing keypoints
- */
-void harris_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
-						pcl::PointCloud<PointType>::Ptr& keypoints){
-	pcl::HarrisKeypoint3D<PointType, pcl::PointXYZI> detector;
-	pcl::PointCloud<pcl::PointXYZI>::Ptr result(new pcl::PointCloud<pcl::PointXYZI>);
-	detector.setNonMaxSupression(HARRIS_NON_MAX_SUPRESSION);
-	detector.setInputCloud(cloud);
-	detector.setThreshold(HARRIS_THRESHOLD);
-	detector.compute(*result);
-	copyPointCloud(*result, *keypoints);
-	
-	#if DEBUG_MSG==1
-		cout << "\tNumber of keypoints with HARRIS detector: " << keypoints->size() << "\n";
-	#endif
-}
 //Descriptors definition methods
-
 
 
 /**
@@ -634,7 +596,7 @@ void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 	shot.setRadiusSearch(SHOT352_RADIUS_SEARCH);
 	shot.setInputCloud(keypoints);
 	shot.setInputNormals(normals);
-	shot.setSearchSurface(cloud);
+	//shot.setSearchSurface(cloud);
 	shot.compute(*descriptors);
 
 	#if DEBUG_MSG==1
@@ -649,6 +611,7 @@ void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
  * @param descriptors output point cloud referencing the descriptors
  */
 void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
+							const pcl::PointCloud<PointType>::ConstPtr& cloud,
 						pcl::PointCloud<pcl::FPFHSignature33>::Ptr& descriptors){
 	
 	pcl::FPFHEstimation<PointType, pcl::Normal, pcl::FPFHSignature33> fpfh;
@@ -656,6 +619,7 @@ void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 	estimate_normals(keypoints, normals);
 	fpfh.setInputCloud(keypoints);
 	fpfh.setInputNormals(normals);
+	//fpfh.setSearchSurface(cloud);
 	pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
 	fpfh.setSearchMethod(tree);
 	// Radio de busqueda, tiene que ser mayor que el utilizado al calcular las normales
@@ -664,39 +628,6 @@ void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 
 	#if DEBUG_MSG==1
 		cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
-	#endif
-}
-
-/**
- * @brief Compute the descriptors using CVFH
- * 
- * @param keypoints input Keypoints
- * @param descriptors output point cloud referencing the descriptors
- */
-void CVFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
-						pcl::PointCloud<pcl::VFHSignature308>::Ptr& descriptors){
-	pcl::CVFHEstimation<PointType, pcl::Normal, pcl::VFHSignature308> cvfh;
-	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
-	estimate_normals(keypoints, normals);	
-	cvfh.setInputCloud(keypoints);
-	cvfh.setInputNormals(normals);
-	pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
-	cvfh.setSearchMethod(tree);
-	// Set the maximum allowable deviation of the normals,
-	// for the region segmentation step.
-	cvfh.setEPSAngleThreshold(CVFH_EPS_ANGLE_THRESHOLD); // 5 degrees.
-	// Set the curvature threshold (maximum disparity between curvatures),
-	// for the region segmentation step.
-	cvfh.setCurvatureThreshold(CVFH_CURVATURE_THRESHOLD);
-	// Set to true to normalize the bins of the resulting histogram,
-	// using the total number of points. Note: enabling it will make CVFH
-	// invariant to scale just like VFH, but the authors encourage the opposite.
-	cvfh.setNormalizeBins(CVFH_NORMALIZE_BINS);
- 
-	cvfh.compute(*descriptors);	
-
-	#if DEBUG_MSG==1
-		cout << "\tNumber of descriptors with CVFH: " << descriptors->size() << "\n";
 	#endif
 }
 
@@ -710,7 +641,7 @@ void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt
 	PointCloud::Ptr tgt (new PointCloud);
 	pcl::VoxelGrid<PointType> grid;
 	if (downsample){
-		grid.setLeafSize (0.05, 0.05, 0.05);
+		grid.setLeafSize (LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
 		grid.setInputCloud (cloud_src);
 		grid.filter (*src);
 
@@ -773,35 +704,8 @@ void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt
 	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity (), prev, targetToSource;
 	PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
 
-	reg.setMaximumIterations (2);
-	
-	for (int i = 0; i < ICP_MAX_ITERATIONS; ++i){
-		PCL_INFO ("Iteration Nr. %d.\n", i);
-
-		// save cloud for visualization purpose
-		points_with_normals_src = reg_result;
-
-		// Estimate
-		reg.setInputSource (points_with_normals_src);
-		reg.align (*reg_result);
-
-			//accumulate transformation between each Iteration
-		Ti = reg.getFinalTransformation () * Ti;
-
-			//if the difference between this transformation and the previous one
-			//is smaller than the threshold, refine the process by reducing
-			//the maximal correspondence distance
-		if (std::abs ((reg.getLastIncrementalTransformation () - prev).sum ()) < reg.getTransformationEpsilon ())
-			reg.setMaxCorrespondenceDistance (reg.getMaxCorrespondenceDistance () - 0.001);
-
-		prev = reg.getLastIncrementalTransformation ();
-
-		// visualize current state
-		#if DEBUG_VIS == 1
-			showCloudsRight(points_with_normals_tgt, points_with_normals_src);
-		#endif
-	}
-
+	reg.setMaximumIterations (ICP_MAX_ITERATIONS);
+	reg.align (*reg_result);
 	//
 	// Get the transformation from target to source
 	targetToSource = Ti.inverse();
@@ -836,49 +740,14 @@ void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt
  }
 
 /**
- * @brief Alignment done between the actual (targeted) point cloud, and the previous (source) one using a SampleConsensusPrerejective algorithm
- * 
- * @param cloud 
- * @param descriptors 
- * @param last_cloud 
- * @param last_descriptors 
- * @param cloud_aligned 
- * @return true 
- * @return false 
- */
-bool ransac_alignment(const pcl::PointCloud<PointType>::ConstPtr& cloud,
-						const pcl::PointCloud<DescriptorType>::ConstPtr& descriptors,
-						const pcl::PointCloud<PointType>::ConstPtr& last_cloud,
-						const pcl::PointCloud<DescriptorType>::ConstPtr& last_descriptors,
-						pcl::PointCloud<PointType>::Ptr cloud_aligned){
-  pcl::SampleConsensusPrerejective<PointType,PointType,DescriptorType> align;
-  align.setInputSource (cloud);
-  align.setSourceFeatures (descriptors);
-  align.setInputTarget (last_cloud);
-  align.setTargetFeatures (last_descriptors);
-  align.setMaximumIterations (50000); // Number of RANSAC iterations
-  align.setNumberOfSamples (3); // Number of points to sample for generating/prerejecting a pose
-  align.setCorrespondenceRandomness (5); // Number of nearest features to use
-  align.setSimilarityThreshold (0.9f); // Polygonal edge length similarity threshold
-  align.setMaxCorrespondenceDistance (2.5f * 0.005); // Inlier threshold
-  align.setInlierFraction (0.25f); // Required inlier fraction for accepting a pose hypothesis
-  {
-    align.align (*cloud_aligned);
-  }
-  return align.hasConverged();
-}
-
-/**
  * @brief Reduces the distances between the points of 2 point cloud and transforms them using ICP algorithm
  * 
- * @param cloud source point cloud
- * @param last_cloud target point cloud
- * @param transformation transformation matrix for alignment which will be modify to express the new reduce alignment
+ * @param cloud point cloud to be transformed
+ * @param last_cloud prev point cloud
+ * @param transformation gross estimated transformation
  */
-void iterative_closest_point(const pcl::PointCloud<PointType>::ConstPtr& cloud,
-						const pcl::PointCloud<PointType>::ConstPtr& last_cloud,/*
-						const pcl::PointCloud<PointType>::ConstPtr& descriptor,
-						const pcl::PointCloud<PointType>::ConstPtr& last_descriptor,*/
+void iterative_closest_point(const pcl::PointCloud<PointType>::ConstPtr& last_cloud,
+						const pcl::PointCloud<PointType>::ConstPtr& cloud,
 						Eigen::Matrix4f& transformation){
 	pcl::IterativeClosestPoint<PointType, PointType> icp;
 	icp.setInputSource(cloud);
@@ -913,14 +782,14 @@ void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
 	// Estimate correspondences
 	pcl::CorrespondencesPtr estimateCorrespondences (new pcl::Correspondences);
 	pcl::registration::CorrespondenceEstimation<PointType, PointType> corr_est;
-	corr_est.setInputSource(cloud);
-	corr_est.setInputTarget(last_cloud);
+	corr_est.setInputSource(last_cloud);
+	corr_est.setInputTarget(cloud);
 	corr_est.determineCorrespondences(*estimateCorrespondences);
 
 	// Apply RANSAC
 	pcl::registration::CorrespondenceRejectorSampleConsensus<PointType> crsc;
-    crsc.setInputSource(cloud);
-    crsc.setInputTarget(last_cloud); 
+    crsc.setInputSource(last_cloud);
+    crsc.setInputTarget(cloud); 
     crsc.setInlierThreshold(RANSAC_INLIER_THRESHOLD); 
     crsc.setMaximumIterations(RANSAC_MAX_ITERATIONS); 
     crsc.setInputCorrespondences(estimateCorrespondences);
@@ -935,68 +804,25 @@ void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
 
 }
 
-/**
- * @brief Transformation using CorrespondecesRejectionSampleConsensus
- * 
- * @param cloud source keypoints cloud
- * @param last_cloud target keypoint cloud
- * @param transformedCloud cloud transformed
- */
-void ransac_transform(const pcl::PointCloud<PointType>::ConstPtr &cloud,
-						const pcl::PointCloud<PointType>::ConstPtr& last_cloud,
-						Eigen::Matrix4f& transform_total,
-						pcl::PointCloud<PointType>::Ptr &transformedCloud){
-	Eigen::Matrix4f transform;
-	pcl::CorrespondencesPtr bestCorrespondences(new pcl::Correspondences);
-
-	// Estimate correspondences
-	pcl::CorrespondencesPtr estimateCorrespondences (new pcl::Correspondences);
-	pcl::registration::CorrespondenceEstimation<PointType, PointType> corr_est;
-	corr_est.setInputSource(cloud);
-	corr_est.setInputTarget(last_cloud);
-	corr_est.determineCorrespondences(*estimateCorrespondences);
-
-	// Apply RANSAC
-	pcl::registration::CorrespondenceRejectorSampleConsensus<PointType>::Ptr crsc(new pcl::registration::CorrespondenceRejectorSampleConsensus<PointType>);
-    crsc->setInputSource(cloud);
-    crsc->setInputTarget(last_cloud); 
-    crsc->setInlierThreshold(0.05); 
-    crsc->setMaximumIterations(5000); 
-    crsc->setInputCorrespondences(estimateCorrespondences);
-	crsc->getCorrespondences(*bestCorrespondences);
-    crsc->setInputCorrespondences(bestCorrespondences);
-	transform = crsc->getBestTransformation();
-
-
-	transform_cloud(transform,transform_total, cloud, transformedCloud);
-	//pcl::transformPointCloud(*keypoints, *transformedCloud, transformTotal);
-
-			
-	#if DEBUG_MSG==1
-		cout << "\tBest transform matrix: " << "\n" << transform << "\n";
-		cout << "\tTotal transform matrix: " << "\n" << transform_total << "\n";
-		cout << "\tSize of transformed cloud: " << transformedCloud->size() << "\n";
-	#endif	
-}
-
 
 //Main algorithm
 
 int main(int argc, char** argv){
-	#if Method_Test == 0
-		// Load data
+	// Load data
 		std::vector<PCD, Eigen::aligned_allocator<PCD> > data;
-		int totalSamples=150;//getTotalSamples(DIRECTORY);
-		loadData(DIRECTORY, totalSamples, data);
+		int totalSamples=50;//getTotalSamples(DIRECTORY);
 
+
+		loadData(DIRECTORY, totalSamples, data);
 		// Check user input
 		if (data.empty ())
 		{
 			PCL_ERROR ("%s is empty or doesn't have pcd files", DIRECTORY);
 			return (-1);
 		}
-		PCL_INFO ("Loaded %d datasets.\n", (int)data.size ());
+		cout<<"Loaded "<< (int)data.size ()<<" datasets.\n"; 
 
+	#if Method_Test == 0
 
 		PointCloud::Ptr result (new PointCloud), source, target;
 		Eigen::Matrix4f Tt = Eigen::Matrix4f::Identity ();
@@ -1004,14 +830,18 @@ int main(int argc, char** argv){
 		for(int i = 1; i<totalSamples;i++){
 
 			processBar(i,totalSamples);
-			//Info last point cloud
+			#if DEBUG_MSG==1
+				cout<<"Info of the last transform: \n"<<
+					"Map info: "<<result->size()<< " total points.\n"<<
+					"Global matrix: \n"<<Tt<<"\n";
 
-			source = data[i-1].cloud;
-			target = data[i].cloud;
+			#endif	
+			//Info last point cloud
 
 			#if DEBUG_MSG==1
 				cout<<"Previous point cloud processing: \n";
 			#endif	
+			source = data[i-1].cloud;
 			pcl::PointCloud<pcl::Normal>::Ptr last_normals(new pcl::PointCloud<pcl::Normal>);
 			estimate_normals(source, last_normals);
 			//Info actual point cloud
@@ -1019,14 +849,14 @@ int main(int argc, char** argv){
 			#if DEBUG_MSG==1
 				cout<<"Actual point cloud processing: \n";
 			#endif	
+			target = data[i].cloud;
 			pcl::PointCloud<pcl::Normal>::Ptr actual_normals(new pcl::PointCloud<pcl::Normal>);
 			estimate_normals(target, actual_normals);
 			
 			/*
 			Keypoints methods	| Descriptors methods
 			1- SIFT				| 1- FPFH
-			2- ISS				| 2- CVFH
-			3- HARRIS			| 3- SHOT
+			2- ISS				| 2- SHOT
 			*/
 
 			//Obtain keypoints
@@ -1058,20 +888,6 @@ int main(int argc, char** argv){
 					cout<<"ACtual point cloud keypoints info: \n";
 				#endif
 				iss_keypoints(target, actual_kp);
-			#elif KeypointsMethod == 3
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud keypoints info: \n";
-				#endif
-				
-				harris_keypoints(source, last_kp);
-
-				#if DEBUG_MSG==1
-					cout<<"Actual point cloud keypoints info: \n";
-				#endif
-
-				
-				harris_keypoints(target, actual_kp);
 			#endif
 				//complexVis(target, actual_kp, actual_normals);
 
@@ -1086,27 +902,14 @@ int main(int argc, char** argv){
 					cout<<"Last point cloud descriptors info: \n";
 				#endif
 				
-				FPFH_descriptors(last_kp, last_dc);	
+				FPFH_descriptors(last_kp, source, last_dc);	
 
 				#if DEBUG_MSG==1
 					cout<<"Actual point cloud descriptors info: \n";
 				#endif
 
-				FPFH_descriptors(actual_kp, actual_dc);
+				FPFH_descriptors(actual_kp,target, actual_dc);
 			#elif DescriptorsMethod == 2
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud descriptors info: \n";
-				#endif
-
-				CVFH_descriptors(last_kp, last_dc);	
-				
-				#if DEBUG_MSG==1
-					cout<<"Actual point cloud descriptors info: \n";
-				#endif
-
-				CVFH_descriptors(actual_kp, actual_dc);	
-			#elif DescriptorsMethod == 3
 				
 				#if DEBUG_MSG==1
 					cout<<"Last point cloud descriptors info: \n";
@@ -1129,50 +932,23 @@ int main(int argc, char** argv){
 			
 			Eigen::Matrix4f Ti=Eigen::Matrix4f::Identity ();
 			pcl::PointCloud<PointType>::Ptr transformed_cloud(new pcl::PointCloud<PointType>());
+			pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
 
 
 
 
 			// Apply ICP
-			#if RANSACMethod==1
-				ransac_correspondences(target, source, Ti, correspondences);
-				iterative_closest_point(target, source, Ti);
-				transform_cloud(Ti, Tt, target, transformed_cloud);
-			
-
-			//RANSAC direct
-
-			#elif RANSACMethod==2
-				ransac_transform(target, source,Tt,transformed_cloud);
-
-			//ransac alignment
-
-			#elif RANSACMethod==3
-				ransac_alignment(target, actual_dc, source, last_dc, transformed_cloud)
-			#endif
-
+			ransac_correspondences(target, source, Ti, correspondences);
+			//iterative_closest_point(target, source, Ti);
+			transform_cloud(Ti, Tt, target, transformed_cloud);
+	
 			filter_voxel_grid(transformed_cloud, cloud_filtered);
 
 			*result += *cloud_filtered;
 		}
 		
-		std::stringstream ss;
-		ss << "src/data/iterative_mapa/end_result.pcd";
-		pcl::io::savePCDFile (ss.str (), *result, true);
-		processBar(totalSamples,totalSamples);
 	#elif Method_Test == 1
-		// Load data
-		std::vector<PCD, Eigen::aligned_allocator<PCD> > data;
-		int totalSamples=150;//getTotalSamples(DIRECTORY);
-		loadData(DIRECTORY, totalSamples, data);
-
-		// Check user input
-		if (data.empty ())
-		{
-			PCL_ERROR ("%s is empty or doesn't have pcd files", DIRECTORY);
-			return (-1);
-		}
-		PCL_INFO ("Loaded %d datasets.\n", (int)data.size ());
+		
 		#if DEBUG_VIS == 1
 			// Create a PCLVisualizer object
 			/**
@@ -1213,9 +989,10 @@ int main(int argc, char** argv){
 			pcl::io::savePCDFile (ss.str (), *result, true);
 
 		}
-		std::stringstream ss;
-		ss << "src/data/iterative_mapa/end_result.pcd";
-		pcl::io::savePCDFile (ss.str (), *result, true);
-		processBar(totalSamples,totalSamples);
 	#endif
+	std::stringstream ss;
+	ss << "src/data/iterative_mapa/end_result.pcd";
+	pcl::io::savePCDFile (ss.str (), *result, true);
+	simpleVis(result);
+	processBar(totalSamples,totalSamples);
 }
