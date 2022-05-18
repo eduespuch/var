@@ -87,13 +87,13 @@
 	//Descriptors configuration
 
 		// FPFH PARAMETERS
-		#define FPFH_RADIUS_SEARCH 0.03
+		#define FPFH_RADIUS_SEARCH 0.5
 
 		// SHOT352 PARAMETERS
-		#define SHOT352_RADIUS_SEARCH 0.05
+		#define SHOT352_RADIUS_SEARCH 0.5
 	//Correspondeces configuration
-		#define RANSAC_MAX_ITERATIONS 3000
-		#define RANSAC_INLIER_THRESHOLD 0.05
+		#define RANSAC_MAX_ITERATIONS 5000
+		#define RANSAC_INLIER_THRESHOLD 0.75
 
 		#define ICP_NORMAL_SEARCH 30
 		#define ICP_MAX_ITERATIONS 40
@@ -103,7 +103,7 @@
 
 	//Others
 		#define NORMALS_K_NEIGHBORS 30
-		#define NORMALS_RADIUS_SEARCH 0.01f
+		#define NORMALS_RADIUS_SEARCH 0.1f
 		
 		#define LEAF_SIZE 0.05f
 
@@ -588,15 +588,14 @@ void sift_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
  */
 void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 							const pcl::PointCloud<PointType>::ConstPtr& cloud,
+							const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
 							pcl::PointCloud<pcl::SHOT352>::Ptr& descriptors){
 	
 	pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
-	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
-	estimate_normals(keypoints, normals);
 	shot.setRadiusSearch(SHOT352_RADIUS_SEARCH);
 	shot.setInputCloud(keypoints);
 	shot.setInputNormals(normals);
-	//shot.setSearchSurface(cloud);
+	shot.setSearchSurface(cloud);
 	shot.compute(*descriptors);
 
 	#if DEBUG_MSG==1
@@ -612,14 +611,13 @@ void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
  */
 void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 							const pcl::PointCloud<PointType>::ConstPtr& cloud,
+							const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
 						pcl::PointCloud<pcl::FPFHSignature33>::Ptr& descriptors){
 	
 	pcl::FPFHEstimation<PointType, pcl::Normal, pcl::FPFHSignature33> fpfh;
-	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
-	estimate_normals(keypoints, normals);
 	fpfh.setInputCloud(keypoints);
 	fpfh.setInputNormals(normals);
-	//fpfh.setSearchSurface(cloud);
+	fpfh.setSearchSurface(cloud);
 	pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
 	fpfh.setSearchMethod(tree);
 	// Radio de busqueda, tiene que ser mayor que el utilizado al calcular las normales
@@ -810,7 +808,7 @@ void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
 int main(int argc, char** argv){
 	// Load data
 		std::vector<PCD, Eigen::aligned_allocator<PCD> > data;
-		int totalSamples=50;//getTotalSamples(DIRECTORY);
+		int totalSamples=getTotalSamples(DIRECTORY);
 
 
 		loadData(DIRECTORY, totalSamples, data);
@@ -902,26 +900,26 @@ int main(int argc, char** argv){
 					cout<<"Last point cloud descriptors info: \n";
 				#endif
 				
-				FPFH_descriptors(last_kp, source, last_dc);	
+				FPFH_descriptors(last_kp, source, last_normals, last_dc);	
 
 				#if DEBUG_MSG==1
 					cout<<"Actual point cloud descriptors info: \n";
 				#endif
 
-				FPFH_descriptors(actual_kp,target, actual_dc);
+				FPFH_descriptors(actual_kp,target,actual_normals, actual_dc);
 			#elif DescriptorsMethod == 2
 				
 				#if DEBUG_MSG==1
 					cout<<"Last point cloud descriptors info: \n";
 				#endif
 
-				SHOT352_descriptors(last_kp, source, last_dc);
+				SHOT352_descriptors(last_kp, source, last_normals, last_dc);
 				
 				#if DEBUG_MSG==1
 					cout<<"Actual point cloud descriptors info: \n";
 				#endif
 
-				SHOT352_descriptors(actual_kp, target, actual_dc);
+				SHOT352_descriptors(actual_kp, target,actual_normals, actual_dc);
 			#endif
 
 			// Matching process
