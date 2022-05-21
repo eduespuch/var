@@ -47,6 +47,7 @@
 	//Visualization
 	#include <pcl/visualization/pcl_visualizer.h>
 	#include <pcl/visualization/cloud_viewer.h>
+	#include<pcl/visualization/pcl_plotter.h>
 
 	//Others
 
@@ -60,21 +61,23 @@
 		2- ISS				| 2- SHOT
 		*/
 		#define KeypointsMethod 1
-		#define DescriptorsMethod 1
+		#define DescriptorsMethod 2
 
 		//Selected descriptor type must me same type of descriptor method
 		#if DescriptorsMethod==1// 1 == FPFH
 			#define DescriptorType pcl::FPFHSignature33 
+			#define DESCRIPTOR_SIZE 33
 		#elif DescriptorsMethod==2// 2 == SHOT352
 			#define DescriptorType pcl::SHOT352 
+			#define DESCRIPTOR_SIZE 352
 		#endif
-	//Keypoints configuration
+	//Keypoints configuration Fase 2 o mayor
 
 		//SIFT PARAMETERS
-		#define SIFT_MIN_SCALE 0.01f
-		#define SIFT_N_OCTAVES 3
-		#define SIFT_N_SCALES_OCTAVE 4
-		#define SIFT_MINIMUM_CONTRAST 0.0001f
+		#define SIFT_MIN_SCALE 0.25f
+		#define SIFT_N_OCTAVES 7
+		#define SIFT_N_SCALES_OCTAVE 8
+		#define SIFT_MINIMUM_CONTRAST 0.1f
 
 		// ISS PARAMETERS
 		#define ISS_SALIENT_RADIUS 6
@@ -84,16 +87,18 @@
 		#define ISS_32_THRESHOLD 0.975
 
 
-	//Descriptors configuration
+	//Descriptors configuration Fase 1 o mayor
 
 		// FPFH PARAMETERS
 		#define FPFH_RADIUS_SEARCH 0.5
 
 		// SHOT352 PARAMETERS
 		#define SHOT352_RADIUS_SEARCH 0.5
-	//Correspondeces configuration
-		#define RANSAC_MAX_ITERATIONS 5000
-		#define RANSAC_INLIER_THRESHOLD 0.75
+
+	//Correspondeces configuration Fase 1 o mayor
+
+		#define RANSAC_MAX_ITERATIONS 10000
+		#define RANSAC_INLIER_THRESHOLD 0.002
 
 		#define ICP_NORMAL_SEARCH 30
 		#define ICP_MAX_ITERATIONS 40
@@ -101,21 +106,39 @@
 		#define ICP_TRANSFORMATION_EPSILON 1e-6
 		#define ICP_EUCLIDEAN_FITNESS_EPSILON 1
 
-	//Others
+	//Others Fase 0 o mayor
 		#define NORMALS_K_NEIGHBORS 30
-		#define NORMALS_RADIUS_SEARCH 0.1f
+		#define NORMALS_RADIUS_SEARCH 0.5f
 		
-		#define LEAF_SIZE 0.05f
 
 		#define DIRECTORY "src/data/dir"
 
-		#define DEBUG_MSG 1
+		#define PREFIX ""
 
-		#define DEBUG_VIS 0
+		/*
+		DEBUG_MSG   | DEBUG_VIS
+		0. None	    | 0. None
+		1. Basic    | 1. Simple
+		2. Complete | 2. Iterative 
+		*/
 
-		#define Method_Test 0
+		#define DEBUG_MSG 2
 
-		#define RANSACMethod 1
+		#define DEBUG_VIS 2
+
+		/*
+		PreFilter | Fase 
+		0. None	  | 0. Print all the initial data
+		1. VG 	  |	1. DS-DC-RANSAC
+				  | 2. KP-DC-RANSAC
+				  | 3. KP-DC-RANSAC-ICP
+		*/
+
+		#define LEAF_SIZE 0.05f
+		#define PreFilter 0
+		//EL voxel grid esta dando problemas
+
+		#define Fase 2
 
 		using namespace std;
 
@@ -125,7 +148,7 @@
 
 //Debugger visualizer
 
-	//our visualizer
+	//our visualizeres
 	pcl::visualization::PCLVisualizer *p;
 	//its left and right viewports
 	int vp_1, vp_2;
@@ -137,50 +160,6 @@ typedef pcl::PointCloud<PointType> PointCloud;
 typedef pcl::PointNormal PointNormalT;
 typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
 	
-/**
- * @brief 
- * 
- */
-struct PCD{
-  PointCloud::Ptr cloud;
-  string f_name;
-
-  PCD() : cloud (new PointCloud) {};
-};
-
-/**
- * @brief 
- * 
- */
-struct PCDComparator{
-  bool operator () (const PCD& p1, const PCD& p2)
-  {
-    return (p1.f_name < p2.f_name);
-  }
-};
-
-
-/**
- * @brief Define a new point representation for < x, y, z, curvature >
- * 
- */
-class MyPointRepresentation : public pcl::PointRepresentation <PointNormalT>{
-	using pcl::PointRepresentation<PointNormalT>::nr_dimensions_;
-	public:
-	MyPointRepresentation (){
-		// Define the number of dimensions
-		nr_dimensions_ = 4;
-	}
-
-	// Override the copyToFloatArray method to define our feature vector
-	virtual void copyToFloatArray (const PointNormalT &p, float * out) const{
-		// < x, y, z, curvature >
-		out[0] = p.x;
-		out[1] = p.y;
-		out[2] = p.z;
-		out[3] = p.curvature;
-	}
-};
 
 //Visualization methods
 
@@ -192,7 +171,9 @@ class MyPointRepresentation : public pcl::PointRepresentation <PointNormalT>{
  */
 void processBar(int iter, int totalIter){
 	//system("sleep 3");
-	system("clear");
+	#if DEGUB_MSG ==0
+		system("clear");
+	#endif
 	cout<<"\n Iteration of the loop number "<<iter<<"\n";
 	//por quedar bonito
 	cout<<"Process: [";
@@ -221,34 +202,52 @@ void showCloudsLeft(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cl
   p->addPointCloud (cloud_target, tgt_h, "vp1_target", vp_1);
   p->addPointCloud (cloud_source, src_h, "vp1_source", vp_1);
 
-  PCL_INFO ("Press q to begin the registration.\n");
-  p-> spin();
 }
 
 /**
- * @brief Display source and target on the second viewport of the visualizer
+ * @brief  Display source and target on the second viewport of the visualizer
  * 
  * @param cloud_target targeted point cloud
  * @param cloud_source  source point cloud
  */
-void showCloudsRight(const PointCloudWithNormals::Ptr cloud_target, const PointCloudWithNormals::Ptr cloud_source){
-  p->removePointCloud ("source");
-  p->removePointCloud ("target");
+void showCloudsRight(const PointCloud::Ptr cloud_target, const PointCloud::Ptr cloud_source){
+  p->removePointCloud ("vp2_target");
+  p->removePointCloud ("vp2_source");
 
+  PointCloudColorHandlerCustom<PointType> tgt_h (cloud_target, 0, 255, 0);
+  PointCloudColorHandlerCustom<PointType> src_h (cloud_source, 255, 0, 0);
+  p->addPointCloud (cloud_target, tgt_h, "vp2_target", vp_2);
+  p->addPointCloud (cloud_source, src_h, "vp2_source", vp_2);
 
-  PointCloudColorHandlerGenericField<PointNormalT> tgt_color_handler (cloud_target, "curvature");
-  if (!tgt_color_handler.isCapable ())
-      PCL_WARN ("Cannot create curvature color handler!");
+}
 
-  PointCloudColorHandlerGenericField<PointNormalT> src_color_handler (cloud_source, "curvature");
-  if (!src_color_handler.isCapable ())
-      PCL_WARN ("Cannot create curvature color handler!");
-
-
-  p->addPointCloud (cloud_target, tgt_color_handler, "target", vp_2);
-  p->addPointCloud (cloud_source, src_color_handler, "source", vp_2);
-
-  p->spinOnce();
+/**
+ * @brief Draws the point cloud with keypoints and normals marked
+ * 
+ * @param cloud point cloud to be drawn
+ * @param keypoints point cloud of keypoints
+ * @param normals point cloud of normal, expected from the cloud
+ */
+void keypointsVis(const pcl::PointCloud<PointType>::ConstPtr& cloud,
+					const pcl::PointCloud<PointType>::ConstPtr& keypoints,
+					const pcl::PointCloud<pcl::Normal>::ConstPtr& normals){
+   pcl::visualization::PCLVisualizer viewer("Keypoint visualizer");
+   viewer.setBackgroundColor(0, 0, 0);
+   viewer.addPointCloud(cloud, "cloud");       
+   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,2, "cloud");   
+   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,1, 1, 1, "cloud");
+   viewer.addPointCloud(keypoints, "keypoints");      
+   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,8, "keypoints");
+   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0, 0.0, 1, "keypoints");
+   //muestra una normal de 10 con una distancia de 5cm
+   viewer.addPointCloudNormals<PointType, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
+       
+    viewer.spinOnce();
+   /*viewer.spinOnce();
+   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+   */viewer.removePointCloud("cloud");
+   viewer.removePointCloud("keypoints");
+   viewer.removePointCloud("normals");
 }
 
 /**
@@ -256,10 +255,10 @@ void showCloudsRight(const PointCloudWithNormals::Ptr cloud_target, const PointC
  * 
  * @param cloud point cloud to be drawn
  */
-void simpleVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud){
-  	pcl::visualization::CloudViewer viewer ("Iterative Cloud Viewer");
+void simpleVis(pcl::PointCloud<PointType>::Ptr cloud){
 	
-    while(!viewer.wasStopped())
+  	pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
+	 while(!viewer.wasStopped())
 	{
 		
 		
@@ -270,37 +269,31 @@ void simpleVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud){
 	}
     
 }
-/**
- * @brief Draws the point cloud with keypoints and normals marked
- * 
- * @param cloud point cloud to be drawn
- * @param keypoints point cloud of keypoints
- * @param normals point cloud of normal, expected from the cloud
- */
-void complexVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints,
-						pcl::PointCloud<pcl::Normal>::Ptr normals){
-   pcl::visualization::PCLVisualizer viewer("Keypoint visualizer");
-   viewer.setBackgroundColor(0, 0, 0);
-   viewer.addPointCloud(cloud, "cloud");       
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,2, "cloud");   
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,1, 1, 1, "cloud");
-   viewer.addPointCloud(keypoints, "keypoints");      
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,8, "keypoints");
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0, 0.0, 1, "keypoints");
-   //muestra una normal de 10 con una distancia de 5cm
-   viewer.addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
-    while (!viewer.wasStopped())
-   {      
-       viewer.spinOnce();
-   }
-   /*viewer.spinOnce();
-   boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-   */viewer.removePointCloud("cloud");
-   viewer.removePointCloud("keypoints");
-   viewer.removePointCloud("normals");
-}
 
 //Auxiliar methods
+
+
+/**
+ * @brief aplies downsampling using preestablished parameters (LEAF_SIZE)
+ * 
+ * @param cloud given point cloud
+ * @param cloud_filtered point cloud with the filtered result
+ */
+void filter_voxel_grid(const pcl::PointCloud<PointType>::ConstPtr& cloud,
+						pcl::PointCloud<PointType>::Ptr cloud_filtered){
+	pcl::VoxelGrid<PointType> v_grid;
+	#if DEBUG_MSG==2
+		cout << "\tBefore VoxelGrid: " << cloud->size() << "\n";
+	#endif
+	v_grid.setInputCloud(cloud);
+	v_grid.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
+	v_grid.filter(*cloud_filtered);
+
+	#if DEBUG_MSG==2
+		cout << "\tAfter VoxelGrid: " << cloud_filtered->size() << "\n";
+	#endif
+
+}
 
 /**
  * @brief Load a set of PCD files that we want to register together.
@@ -310,43 +303,31 @@ void complexVis(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,pcl::PointCloud<pcl
  * @param totalSamples total of files to read
  * @param models the resultant vector of point cloud datasets
  */
-void loadData(const string& dir, const int totalSamples, vector<PCD, Eigen::aligned_allocator<PCD> > &models){
-  string extension (".pcd");
+void loadData(const string& dir, const int totalSamples,
+				vector<PointCloud::Ptr, Eigen::aligned_allocator<PointCloud::Ptr> > &models){
   // Suppose the first argument is the actual test model
   for (int i = 0; i < totalSamples; i++){
 
+  	PointCloud::Ptr cloud (new PointCloud);
       // Load the cloud and saves it into the global list of models
-      PCD m;
-      m.f_name = dir+"/"+to_string(i)+".pcd";
-      pcl::io::loadPCDFile (m.f_name, *m.cloud);
-      //remove NAN points from the cloud
-      vector<int> indices;
-      pcl::removeNaNFromPointCloud(*m.cloud,*m.cloud, indices);
-
-      models.push_back (m);
-  }
-}
-
-/**
- * @brief Loads a specific point cloud
- * 
- * @param dir directory with samples
- * @param iter actual iteration
- * @param cloud point cloud with the result
- * @return true pcd files are loaded
- * @return false pcd files aren't loaded
- */
-bool loadPointClouds(const string& dir, const int iter, 
-						pcl::PointCloud<PointType>::Ptr cloud){
-
-	if(pcl::io::loadPCDFile<PointType>(dir+"/"+to_string(iter)+".pcd",*cloud)==-1){
-		return false;
+	string file= dir+"/"+PREFIX+to_string(i)+".pcd";
+	if(pcl::io::loadPCDFile<PointType>(file,*cloud)==-1){
+		PCL_ERROR("Fail to read %s",file);
+		exit(-1);
 	}
+	//remove NAN points from the cloud
+	vector<int> indices;
+	pcl::removeNaNFromPointCloud(*cloud,*cloud, indices);
 
-	#if DEBUG_MSG==1
-		cout<<"\tLoadad actual point cloud from "<<dir<<"/"<<to_string(iter)<<".pcd with "<<cloud->size()<<" points\n";
+	#if PreFilter == 1
+  		PointCloud::Ptr temp (new PointCloud);
+		temp=cloud;
+		filter_voxel_grid(temp, cloud);
 	#endif
-	return true;
+
+
+	models.push_back (cloud);
+  }
 }
 
 /**
@@ -384,25 +365,6 @@ int getTotalSamples(const string& i){
    return totalSamples;
 }
 
-/**
- * @brief Removes NaN points from a point cloud
- * 
- * @param cloud cloud of points to modify
- */
-void remove_nan(pcl::PointCloud<PointType>::Ptr cloud){
-
-
-	cout << "\tNumber of points before remove_nan: " << cloud->size() << "\n";
-
-	pcl::PointCloud<PointType>::Ptr output(new pcl::PointCloud<PointType>());
-	vector<int> indices;
-	pcl::removeNaNFromPointCloud(*cloud, *output, indices);
-	*cloud = *output;
-
-
-	cout << "\tNumber of points after remove_nan: " << cloud->size() << "\n";
-
-}
 
 /**
  * @brief Updates de Global transform Matrix and modifies the target point cloud
@@ -418,31 +380,11 @@ void transform_cloud(const Eigen::Matrix4f &transform, Eigen::Matrix4f &transfor
 	transform_total *= transform;
 	pcl::transformPointCloud(*cloud, *transformedCloud, transform_total);
 
-	#if DEBUG_MSG==1
+	#if DEBUG_MSG==2
 		cout << "\tTransformTotal matrix: \n" << transform_total << "\n";
 	#endif
 }
 
-
-
-/**
- * @brief aplies downsampling using preestablished parameters (LEAF_SIZE)
- * 
- * @param cloud given point cloud
- * @param cloud_filtered point cloud with the filtered result
- */
-void filter_voxel_grid(const pcl::PointCloud<PointType>::ConstPtr& cloud,
-						pcl::PointCloud<PointType>::Ptr cloud_filtered){
-	pcl::VoxelGrid<PointType> v_grid;
-	v_grid.setInputCloud(cloud);
-	v_grid.setLeafSize(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
-	v_grid.filter(*cloud_filtered);
-
-	#if DEBUG_MSG==1
-		cout << "\tNumber of points after VoxelGrid: " << cloud_filtered->size() << "\n";
-	#endif
-
-}
 
 /**
  * @brief Estimates de local normals of a point cloud
@@ -466,7 +408,7 @@ void estimate_normals(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 	ne.compute(*normals);
 
 	
-	#if DEBUG_MSG==1
+	#if DEBUG_MSG==2
 		cout << "\tNumber of normal estimated: " << normals->size() << "\n";
 	#endif
 
@@ -488,9 +430,7 @@ double get_cpu_time(void){
     return t;
 }
 
-
-
-//Keypoints extraction methods
+//Keypoints extraction
 
 /**
  * @brief Calculates de spatial resolution of a point cloud given using the average distance between a point and its closest neighbour
@@ -522,249 +462,141 @@ double get_cloud_resolution(const pcl::PointCloud<PointType>::ConstPtr& cloud){
 }
 
 /**
- * @brief Obtains the keypoints of cloud point using ISSKeypoint3D
+ * @brief Obtains the keypoints of cloud point 
  * 
  * @param cloud inpunt point cloud
- * @param keypoints output point cloud, referencing keypoints
- */
-void iss_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
-					pcl::PointCloud<PointType>::Ptr& keypoints){
-
-	pcl::ISSKeypoint3D<PointType, PointType> iss_detector;	
-	//Get cloud resolution
-	double actual_res=get_cloud_resolution(cloud);
-	//iss_detector
-	iss_detector.setInputCloud(cloud);
-	// Set the radius of the spherical neighborhood used to compute the scatter matrix.
-	iss_detector.setSalientRadius(ISS_SALIENT_RADIUS*actual_res);
-	// Set the radius for the application of the non maxima supression algorithm.
-	iss_detector.setNonMaxRadius(ISS_NON_MAX_RADIUS*actual_res);
-	// Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
-	iss_detector.setMinNeighbors(ISS_MIN_NEIGHBORS);
-	// Set the upper bound on the ratio between the second and the first eigenvalue.
-	iss_detector.setThreshold21(ISS_21_THRESHOLD);
-	// Set the upper bound on the ratio between the third and the second eigenvalue.
-	iss_detector.setThreshold32(ISS_32_THRESHOLD);
-	iss_detector.compute(*keypoints);
-	
-	#if DEBUG_MSG==1
-		cout << "\tNumber of keypoints with ISS detector: " << keypoints->size() << "\n";
-	#endif
-}
-
-/**
- * @brief Obtains the keypoints of cloud point using SIFT
- * 
- * @param cloud inpunt point cloud
+ * @param normals normals of the input cloud, just for vis purposes
  * @param keypoints output point cloud, referencing keypoints
  */					
-void sift_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
+void extract_keypoints(const pcl::PointCloud<PointType>::ConstPtr& cloud,
+					const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
 					pcl::PointCloud<PointType>::Ptr& keypoints){
-	pcl::SIFTKeypoint<PointType, pcl::PointWithScale> sift;
-	pcl::PointCloud<pcl::PointWithScale> result;
-	pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>());
-	sift.setSearchMethod(tree);
-	// min_scale, n_octaves, n_scales_per_octave
-	sift.setScales(SIFT_MIN_SCALE, SIFT_N_OCTAVES, SIFT_N_SCALES_OCTAVE);
-	sift.setMinimumContrast(SIFT_MINIMUM_CONTRAST);
-	sift.setInputCloud(cloud);
-	sift.compute(result);
-	copyPointCloud(result, *keypoints);
-	
-	#if DEBUG_MSG==1
-		cout << "\tNumber of keypoints with SIFT detector: " << keypoints->size() << "\n";
+
+	#if KeypointsMethod == 1 //SHIFT
+		pcl::SIFTKeypoint<PointType, pcl::PointWithScale> sift;
+		pcl::PointCloud<pcl::PointWithScale> result;
+		pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>());
+		sift.setSearchMethod(tree);
+		// min_scale, n_octaves, n_scales_per_octave
+		sift.setScales(SIFT_MIN_SCALE, SIFT_N_OCTAVES, SIFT_N_SCALES_OCTAVE);
+		sift.setMinimumContrast(SIFT_MINIMUM_CONTRAST);
+		sift.setInputCloud(cloud);
+		sift.compute(result);
+		copyPointCloud(result, *keypoints);
+		
+		#if DEBUG_MSG==2
+			cout << "\tNumber of keypoints with SIFT detector: " << keypoints->size() << "\n";
+		#endif
+	#elif KeypointsMethod == 2 //ISS
+		pcl::ISSKeypoint3D<PointType, PointType> iss_detector;	
+		//Get cloud resolution
+		double actual_res=get_cloud_resolution(cloud);
+		//iss_detector
+		iss_detector.setInputCloud(cloud);
+		// Set the radius of the spherical neighborhood used to compute the scatter matrix.
+		iss_detector.setSalientRadius(ISS_SALIENT_RADIUS*actual_res);
+		// Set the radius for the application of the non maxima supression algorithm.
+		iss_detector.setNonMaxRadius(ISS_NON_MAX_RADIUS*actual_res);
+		// Set the minimum number of neighbors that has to be found while applying the non maxima suppression algorithm.
+		iss_detector.setMinNeighbors(ISS_MIN_NEIGHBORS);
+		// Set the upper bound on the ratio between the second and the first eigenvalue.
+		iss_detector.setThreshold21(ISS_21_THRESHOLD);
+		// Set the upper bound on the ratio between the third and the second eigenvalue.
+		iss_detector.setThreshold32(ISS_32_THRESHOLD);
+		iss_detector.compute(*keypoints);
+		#if DEBUG_MSG==2
+			cout << "\tNumber of keypoints with ISS detector: " << keypoints->size() << "\n";
+		#endif
+	#endif
+	#if DEBUG_VIS == 2
+		cout<<"\tShowing Keypoints extracted:\n";
+		keypointsVis(cloud, keypoints, normals);
 	#endif
 }
 
-//Descriptors definition methods
-
+//Descriptors obtention
 
 /**
- * @brief Compute the descriptors using SHOT352
+ * @brief Compute the descriptors 
  * 
  * @param keypoints input Keypoints
- * @param cloud input point clouds
  * @param descriptors output point cloud referencing the descriptors
  */
-void SHOT352_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
-							const pcl::PointCloud<PointType>::ConstPtr& cloud,
-							const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
-							pcl::PointCloud<pcl::SHOT352>::Ptr& descriptors){
-	
-	pcl::SHOTEstimation<PointType, pcl::Normal, pcl::SHOT352> shot;
-	shot.setRadiusSearch(SHOT352_RADIUS_SEARCH);
-	shot.setInputCloud(keypoints);
-	shot.setInputNormals(normals);
-	shot.setSearchSurface(cloud);
-	shot.compute(*descriptors);
 
-	#if DEBUG_MSG==1
-		cout << "\tNumber of descriptors with SHOT352: " << descriptors->size() << "\n";
+/**
+ * @brief Compute the descriptors 
+ * 
+ * @param cloud input
+ * @param normals normals of the input
+ * @param descriptors output 
+ */
+void compute_descriptors(const pcl::PointCloud<PointType>::ConstPtr& cloud,
+						const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
+						pcl::PointCloud<DescriptorType>::Ptr& descriptors){
+	#if DescriptorsMethod == 1 //FPFH
+		pcl::FPFHEstimation<PointType, pcl::Normal, DescriptorType> fpfh;
+		fpfh.setInputCloud(cloud);
+		fpfh.setInputNormals(normals);
+		pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
+		fpfh.setSearchMethod(tree);
+		// Radio de busqueda, tiene que ser mayor que el utilizado al calcular las normales
+		fpfh.setRadiusSearch(FPFH_RADIUS_SEARCH);
+		fpfh.compute(*descriptors);
+
+		#if DEBUG_MSG==2
+			cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
+		#endif
+	#elif DescriptorsMethod == 2 //SHOT
+		pcl::SHOTEstimation<PointType, pcl::Normal, DescriptorType> shot;
+		shot.setRadiusSearch(SHOT352_RADIUS_SEARCH);
+		shot.setInputCloud(cloud);
+		shot.setInputNormals(normals);
+		shot.compute(*descriptors);
+		#if DEBUG_MSG==2
+			cout << "\tNumber of descriptors with SHOT: " << descriptors->size() << "\n";
+		#endif
 	#endif
 }
 
 /**
- * @brief Compute the descriptors using the "FAST" PFH variant
+ * @brief Compute the descriptors 
  * 
  * @param keypoints input Keypoints
  * @param descriptors output point cloud referencing the descriptors
  */
-void FPFH_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
+void compute_descriptors(const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 							const pcl::PointCloud<PointType>::ConstPtr& cloud,
 							const pcl::PointCloud<pcl::Normal>::ConstPtr& normals,
-						pcl::PointCloud<pcl::FPFHSignature33>::Ptr& descriptors){
+						pcl::PointCloud<DescriptorType>::Ptr& descriptors){
 	
-	pcl::FPFHEstimation<PointType, pcl::Normal, pcl::FPFHSignature33> fpfh;
-	fpfh.setInputCloud(keypoints);
-	fpfh.setInputNormals(normals);
-	fpfh.setSearchSurface(cloud);
-	pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
-	fpfh.setSearchMethod(tree);
-	// Radio de busqueda, tiene que ser mayor que el utilizado al calcular las normales
-	fpfh.setRadiusSearch(FPFH_RADIUS_SEARCH);
-	fpfh.compute(*descriptors);
+	#if DescriptorsMethod == 1
+		pcl::FPFHEstimation<PointType, pcl::Normal, DescriptorType> fpfh;
+		fpfh.setInputCloud(keypoints);
+		fpfh.setInputNormals(normals);
+		fpfh.setSearchSurface(cloud);
+		pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>());
+		fpfh.setSearchMethod(tree);
+		// Radio de busqueda, tiene que ser mayor que el utilizado al calcular las normales
+		fpfh.setRadiusSearch(FPFH_RADIUS_SEARCH);
+		fpfh.compute(*descriptors);
 
-	#if DEBUG_MSG==1
-		cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
+		#if DEBUG_MSG==2
+			cout << "\tNumber of descriptors with FPFH: " << descriptors->size() << "\n";
+		#endif
+	#elif DescriptorsMethod == 2
+		pcl::SHOTEstimation<PointType, pcl::Normal, DescriptorType> shot;
+		shot.setRadiusSearch(SHOT352_RADIUS_SEARCH);
+		shot.setInputCloud(keypoints);
+		shot.setInputNormals(normals);
+		shot.setSearchSurface(cloud);
+		shot.compute(*descriptors);
+		#if DEBUG_MSG==2
+			cout << "\tNumber of descriptors with SHOT: " << descriptors->size() << "\n";
+		#endif
 	#endif
 }
 
-//Correspondences methods
-
-void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt, PointCloud::Ptr output, Eigen::Matrix4f &final_transform, bool downsample = false){
-	//
-	// Downsample for consistency and speed
-	// \note enable this for large datasets
-	PointCloud::Ptr src (new PointCloud);
-	PointCloud::Ptr tgt (new PointCloud);
-	pcl::VoxelGrid<PointType> grid;
-	if (downsample){
-		grid.setLeafSize (LEAF_SIZE, LEAF_SIZE, LEAF_SIZE);
-		grid.setInputCloud (cloud_src);
-		grid.filter (*src);
-
-		grid.setInputCloud (cloud_tgt);
-		grid.filter (*tgt);
-	}else{
-		src = cloud_src;
-		tgt = cloud_tgt;
-	}
-
-
-	// Compute surface normals and curvature
-	PointCloudWithNormals::Ptr points_with_normals_src (new PointCloudWithNormals);
-	PointCloudWithNormals::Ptr points_with_normals_tgt (new PointCloudWithNormals);
-
-	pcl::NormalEstimation<PointType, PointNormalT> norm_est;
-	pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType> ());
-	norm_est.setSearchMethod (tree);
-	norm_est.setKSearch (ICP_NORMAL_SEARCH);
-
-	norm_est.setInputCloud (src);
-	norm_est.compute (*points_with_normals_src);
-	pcl::copyPointCloud (*src, *points_with_normals_src);
-
-	norm_est.setInputCloud (tgt);
-	norm_est.compute (*points_with_normals_tgt);
-	pcl::copyPointCloud (*tgt, *points_with_normals_tgt);
-
-	#if DEBUG_MSG==1
-		cout << "\tEstimated normals on source: " << points_with_normals_src->size() << "\n";
-		cout << "\tEstimated normals on target: " << points_with_normals_tgt->size()<< "\n";
-	#endif
-
-	//
-	// Instantiate our custom point representation (defined above) ...
-	MyPointRepresentation point_representation;
-	// ... and weight the 'curvature' dimension so that it is balanced against x, y, and z
-	float alpha[4] = {1.0, 1.0, 1.0, 1.0};
-	point_representation.setRescaleValues (alpha);
-
-	//
-	// Align
-	pcl::IterativeClosestPointNonLinear<PointNormalT, PointNormalT> reg;
-	reg.setTransformationEpsilon (ICP_TRANSFORMATION_EPSILON);
-	// Set the maximum distance between two correspondences (src<->tgt) to 10cm
-	// Note: adjust this based on the size of your datasets
-	reg.setMaxCorrespondenceDistance (ICP_MAX_CORRESPONDENCE_DISTANCE);  
-	// Set the point representation
-	reg.setPointRepresentation (pcl::make_shared<const MyPointRepresentation> (point_representation));
-	//Set fitness equation
-	reg.setEuclideanFitnessEpsilon(ICP_EUCLIDEAN_FITNESS_EPSILON);
-
-	reg.setInputSource (points_with_normals_src);
-	reg.setInputTarget (points_with_normals_tgt);
-
-
-
-	//
-	// Run the same optimization in a loop and visualize the results
-	Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity (), prev, targetToSource;
-	PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
-
-	reg.setMaximumIterations (ICP_MAX_ITERATIONS);
-	reg.align (*reg_result);
-	//
-	// Get the transformation from target to source
-	targetToSource = Ti.inverse();
-
-	//
-	// Transform target back in source frame
-	pcl::transformPointCloud (*cloud_tgt, *output, targetToSource);
-	#if DEBUG_VIS == 1
-		p->removePointCloud ("source");
-		p->removePointCloud ("target");
-
-		PointCloudColorHandlerCustom<PointT> cloud_tgt_h (output, 0, 255, 0);
-		PointCloudColorHandlerCustom<PointT> cloud_src_h (cloud_src, 255, 0, 0);
-		p->addPointCloud (output, cloud_tgt_h, "target", vp_2);
-		p->addPointCloud (cloud_src, cloud_src_h, "source", vp_2);
-
-		PCL_INFO ("Press q to continue the registration.\n");
-		p->spin ();
-
-		p->removePointCloud ("source"); 
-		p->removePointCloud ("target");
-	#endif
-	//add the source to the transformed target
-	*output += *cloud_src;
-
-	#if DEBUG_MSG==1
-		cout << "\tICP matrix transformation: \n" << targetToSource << "\n";
-		system("sleep 1");
-	#endif
-
-	final_transform = targetToSource;
- }
-
-/**
- * @brief Reduces the distances between the points of 2 point cloud and transforms them using ICP algorithm
- * 
- * @param cloud point cloud to be transformed
- * @param last_cloud prev point cloud
- * @param transformation gross estimated transformation
- */
-void iterative_closest_point(const pcl::PointCloud<PointType>::ConstPtr& last_cloud,
-						const pcl::PointCloud<PointType>::ConstPtr& cloud,
-						Eigen::Matrix4f& transformation){
-	pcl::IterativeClosestPoint<PointType, PointType> icp;
-	icp.setInputSource(cloud);
-	icp.setInputTarget(last_cloud);
-	icp.setMaxCorrespondenceDistance(ICP_MAX_CORRESPONDENCE_DISTANCE);
-	icp.setMaximumIterations(ICP_MAX_ITERATIONS);
-	icp.setTransformationEpsilon(ICP_TRANSFORMATION_EPSILON);
-	icp.setEuclideanFitnessEpsilon(ICP_EUCLIDEAN_FITNESS_EPSILON);
-	pcl::PointCloud<PointType> aligned_cloud;
-	icp.align(aligned_cloud, transformation);
-	if(icp.hasConverged())
-		transformation = icp.getFinalTransformation();
-
-	#if DEBUG_MSG==1
-		cout << "\tICP Score: " << icp.getFitnessScore() << "\n";
-		cout << "\tICP matrix transformation: \n" << transformation << "\n";
-	#endif
-}
-
+//Correspondeces computing
 /**
  * @brief Obtains the correspondences and filters them to get the best correspondences using RANSAC
  * 
@@ -773,28 +605,31 @@ void iterative_closest_point(const pcl::PointCloud<PointType>::ConstPtr& last_cl
  * @param transformation transformation matrix obtained as a result
  * @param bestCorrespondences best corresponcedes obtained as a result
  */
-void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
-								const pcl::PointCloud<PointType>::ConstPtr& last_cloud,
+void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr& source,
+								const pcl::PointCloud<PointType>::ConstPtr &target,
+								const pcl::PointCloud<DescriptorType>::ConstPtr& source_dc,
+								const pcl::PointCloud<DescriptorType>::ConstPtr& target_dc,
 								Eigen::Matrix4f& transformation,
 								pcl::CorrespondencesPtr& bestCorrespondences){
 	// Estimate correspondences
 	pcl::CorrespondencesPtr estimateCorrespondences (new pcl::Correspondences);
-	pcl::registration::CorrespondenceEstimation<PointType, PointType> corr_est;
-	corr_est.setInputSource(last_cloud);
-	corr_est.setInputTarget(cloud);
-	corr_est.determineCorrespondences(*estimateCorrespondences);
+
+	pcl::registration::CorrespondenceEstimation<DescriptorType, DescriptorType> est;
+	est.setInputSource(source_dc);
+	est.setInputTarget(target_dc);
+	est.determineCorrespondences(*estimateCorrespondences);
 
 	// Apply RANSAC
 	pcl::registration::CorrespondenceRejectorSampleConsensus<PointType> crsc;
-    crsc.setInputSource(last_cloud);
-    crsc.setInputTarget(cloud); 
+    crsc.setInputSource(source);
+    crsc.setInputTarget(target); 
     crsc.setInlierThreshold(RANSAC_INLIER_THRESHOLD); 
     crsc.setMaximumIterations(RANSAC_MAX_ITERATIONS); 
     crsc.setInputCorrespondences(estimateCorrespondences);
 	crsc.getCorrespondences(*bestCorrespondences);
 	transformation = crsc.getBestTransformation();
 	
-	#if DEBUG_MSG==1
+	#if DEBUG_MSG==2
 		cout << "\tNumber of estimation correspondences: " << estimateCorrespondences->size() << "\n";
 		cout << "\tNumber of remaining correspondences: " << bestCorrespondences->size() << "\n";
 		cout << "\tMatrix transformation: \n" << transformation << "\n";
@@ -802,195 +637,188 @@ void ransac_correspondences(const pcl::PointCloud<PointType>::ConstPtr &cloud,
 
 }
 
-
 //Main algorithm
 
 int main(int argc, char** argv){
 	// Load data
-		std::vector<PCD, Eigen::aligned_allocator<PCD> > data;
-		int totalSamples=getTotalSamples(DIRECTORY);
+	std::vector<PointCloud::Ptr, Eigen::aligned_allocator<PointCloud::Ptr> > data;
+	int totalSamples=getTotalSamples(DIRECTORY);
 
 
-		loadData(DIRECTORY, totalSamples, data);
-		// Check user input
-		if (data.empty ())
-		{
-			PCL_ERROR ("%s is empty or doesn't have pcd files", DIRECTORY);
-			return (-1);
-		}
-		cout<<"Loaded "<< (int)data.size ()<<" datasets.\n"; 
+	loadData(DIRECTORY, totalSamples, data);
+	// Check user input
+	if (data.empty ())
+	{
+		PCL_ERROR ("%s is empty or doesn't have pcd files", DIRECTORY);
+		return (-1);
+	}
+	cout<<"Loaded "<< (int)data.size ()<<" datasets.\n"; 
 
-	#if Method_Test == 0
+	//Initialize common use resources
+	PointCloud::Ptr result (new PointCloud), source(new PointCloud), target(new PointCloud);
+	Eigen::Matrix4f Tt = Eigen::Matrix4f::Identity ();
+	result=data[0];
 
-		PointCloud::Ptr result (new PointCloud), source, target;
-		Eigen::Matrix4f Tt = Eigen::Matrix4f::Identity ();
+	//Initialize debugger visualizers
+	#if DEBUG_VIS == 1 //Simple visualizer
 
-		for(int i = 1; i<totalSamples;i++){
+	#elif DEBUG_VIS == 2 //Complex visualizer
+		// Create a PCLVisualizer object
+		p = new pcl::visualization::PCLVisualizer ("Actual iteration and overall result");
+		p->createViewPort (0.0, 0, 0.5, 1.0, vp_1);
+		p->createViewPort (0.5, 0, 1.0, 1.0, vp_2);
+	#endif
 
-			processBar(i,totalSamples);
-			#if DEBUG_MSG==1
-				cout<<"Info of the last transform: \n"<<
-					"Map info: "<<result->size()<< " total points.\n"<<
-					"Global matrix: \n"<<Tt<<"\n";
+	//Starts the main loop
+	for(int i = 1; i<totalSamples;i++){
+		//Global info
+		processBar(i,totalSamples);
 
-			#endif	
-			//Info last point cloud
 
-			#if DEBUG_MSG==1
-				cout<<"Previous point cloud processing: \n";
-			#endif	
-			source = data[i-1].cloud;
-			pcl::PointCloud<pcl::Normal>::Ptr last_normals(new pcl::PointCloud<pcl::Normal>);
-			estimate_normals(source, last_normals);
-			//Info actual point cloud
+		#if DEBUG_MSG==1 || DEBUG_MSG==2
+			cout<<"Info of the last transform: \n"<<
+				"Map info: "<<result->size()<< " total points.\n"<<
+				"Global matrix: \n"<<Tt<<"\n";
 
-			#if DEBUG_MSG==1
-				cout<<"Actual point cloud processing: \n";
-			#endif	
-			target = data[i].cloud;
-			pcl::PointCloud<pcl::Normal>::Ptr actual_normals(new pcl::PointCloud<pcl::Normal>);
-			estimate_normals(target, actual_normals);
-			
-			/*
-			Keypoints methods	| Descriptors methods
-			1- SIFT				| 1- FPFH
-			2- ISS				| 2- SHOT
-			*/
+		#endif	
 
-			//Obtain keypoints
+		//Info last point cloud
 
-			pcl::PointCloud<PointType>::Ptr last_kp(new pcl::PointCloud<PointType>());
-			pcl::PointCloud<PointType>::Ptr actual_kp(new pcl::PointCloud<PointType>());
-			
-			#if KeypointsMethod	== 1
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud keypoints info: \n";
-				#endif
+		#if DEBUG_MSG==2
+			cout<<"Previous point cloud processing: \n";
+		#endif	
 
-				
-				sift_keypoints(source, last_kp);
 
-				#if DEBUG_MSG==1
-					cout<<"Actual point cloud keypoints info: \n";
-				#endif
+		source = data[i-1];
 
-				sift_keypoints(target, actual_kp);
-			#elif KeypointsMethod == 2
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud keypoints info: \n";
-				#endif
-				iss_keypoints(source, last_kp);
-				#if DEBUG_MSG==1
-					cout<<"ACtual point cloud keypoints info: \n";
-				#endif
-				iss_keypoints(target, actual_kp);
-			#endif
-				//complexVis(target, actual_kp, actual_normals);
+		pcl::PointCloud<pcl::Normal>::Ptr source_normals(new pcl::PointCloud<pcl::Normal>);
+		estimate_normals(source, source_normals);
 
-			// Obtain descriptors
+		//Info actual point cloud
 
-				pcl::PointCloud<DescriptorType>::Ptr last_dc(new pcl::PointCloud<DescriptorType>());
-				pcl::PointCloud<DescriptorType>::Ptr actual_dc(new pcl::PointCloud<DescriptorType>());
+		#if DEBUG_MSG==2
+			cout<<"Actual point cloud processing: \n";
+		#endif	
+		
+		target = data[i];
 
-			#if DescriptorsMethod == 1
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud descriptors info: \n";
-				#endif
-				
-				FPFH_descriptors(last_kp, source, last_normals, last_dc);	
+		pcl::PointCloud<pcl::Normal>::Ptr target_normals(new pcl::PointCloud<pcl::Normal>);
+		estimate_normals(target, target_normals);
+	/*
+	Fase 
+		0. Print all the initial data
+		1. DS-DC-RANSAC
+		2. KP-DC-RANSAC
+		3. KP-DC-RANSAC-ICP
+	*/
+		#if Fase == 0
+		// Add visualization data
+			cout<<"Source info: "<<source->size()<<" total points, with "<<source_normals->size()<<" normals\n";
+			cout<<"Target info: "<<target->size()<<" total points, with "<<target_normals->size()<<" normals\n";
 
-				#if DEBUG_MSG==1
-					cout<<"Actual point cloud descriptors info: \n";
-				#endif
-
-				FPFH_descriptors(actual_kp,target,actual_normals, actual_dc);
-			#elif DescriptorsMethod == 2
-				
-				#if DEBUG_MSG==1
-					cout<<"Last point cloud descriptors info: \n";
-				#endif
-
-				SHOT352_descriptors(last_kp, source, last_normals, last_dc);
-				
-				#if DEBUG_MSG==1
-					cout<<"Actual point cloud descriptors info: \n";
-				#endif
-
-				SHOT352_descriptors(actual_kp, target,actual_normals, actual_dc);
+			#if DEBUG_VIS == 2 //Complex visualizer
+				showCloudsLeft(source, target);
+				p->spin();
 			#endif
 
-			// Matching process
+		#elif Fase == 1
+			#if DEBUG_VIS == 2 //Complex visualizer
+				showCloudsLeft(source, target);
+			#endif
+		//Get descriptors
+			pcl::PointCloud<DescriptorType>::Ptr source_dc(new pcl::PointCloud<DescriptorType>());
+			pcl::PointCloud<DescriptorType>::Ptr target_dc(new pcl::PointCloud<DescriptorType>());
+			#if DEBUG_MSG==2
+				cout<<"Last point cloud descriptors info: \n";
+			#endif
+				
+			compute_descriptors(source, source_normals, source_dc);	
 
-			pcl::CorrespondencesPtr correspondences (new pcl::Correspondences ());
+			#if DEBUG_MSG==2
+				cout<<"Actual point cloud descriptors info: \n";
+			#endif
 
+			compute_descriptors(target,target_normals, target_dc);
+
+		//Get correspondeces
+			pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
 			// Obtain correspondences
 			
 			Eigen::Matrix4f Ti=Eigen::Matrix4f::Identity ();
 			pcl::PointCloud<PointType>::Ptr transformed_cloud(new pcl::PointCloud<PointType>());
-			pcl::PointCloud<PointType>::Ptr cloud_filtered(new pcl::PointCloud<PointType>());
-
-
-
-
-			// Apply ICP
-			ransac_correspondences(target, source, Ti, correspondences);
-			//iterative_closest_point(target, source, Ti);
+			ransac_correspondences(source, target, source_dc, target_dc, Ti, correspondences);
 			transform_cloud(Ti, Tt, target, transformed_cloud);
-	
-			filter_voxel_grid(transformed_cloud, cloud_filtered);
-
-			*result += *cloud_filtered;
-		}
-		
-	#elif Method_Test == 1
-		
-		#if DEBUG_VIS == 1
-			// Create a PCLVisualizer object
-			/**
-			 * @todo alternativa a argv, array con los nombres de los ficheros
-			 */
-			p = new pcl::visualization::PCLVisualizer (totalSamples, argv, "Pairwise Incremental Registration example");
-			p->createViewPort (0.0, 0, 0.5, 1.0, vp_1);
-			p->createViewPort (0.5, 0, 1.0, 1.0, vp_2);
-		#endif
-
-			PointCloud::Ptr result (new PointCloud), source, target;
-		Eigen::Matrix4f GlobalTransform = Eigen::Matrix4f::Identity (), pairTransform;
-		
-		for (std::size_t i = 1; i < data.size (); ++i)
-		{
-			processBar(i,totalSamples);
-			source = data[i-1].cloud;
-			target = data[i].cloud;
 			
-			#if DEBUG_VIS == 1
-				// Add visualization data
+			#if DEBUG_VIS == 2
+				showCloudsRight(result, transformed_cloud);		
+				p->spin();
+			#endif
+			*result += *transformed_cloud;
+		#elif Fase == 2 
+
+			#if DEBUG_VIS == 2 //Complex visualizer
 				showCloudsLeft(source, target);
 			#endif
+		//Get Keypoints
 
-			PointCloud::Ptr temp (new PointCloud);
-			PCL_INFO ("Aligning %s (%zu) with %s (%zu).\n", data[i-1].f_name.c_str (), static_cast<std::size_t>(source->size ()), data[i].f_name.c_str (), static_cast<std::size_t>(target->size ()));
-			pairAlign (source, target, temp, pairTransform, false);
+			pcl::PointCloud<PointType>::Ptr source_kp(new pcl::PointCloud<PointType>());
+			pcl::PointCloud<PointType>::Ptr target_kp(new pcl::PointCloud<PointType>());
 
-			//transform current pair into the global transform
-			pcl::transformPointCloud (*temp, *result, GlobalTransform);
+				
+			#if DEBUG_MSG==2
+				cout<<"Last point cloud keypoints info: \n";
+			#endif
 
-			//update the global transform
-			GlobalTransform *= pairTransform;
+				
+			extract_keypoints(source, source_normals, source_kp);
 
-			//save aligned pair, transformed into the first cloud's frame
-			std::stringstream ss;
-			ss << "src/data/iterative_mapa/" <<i << ".pcd";
-			pcl::io::savePCDFile (ss.str (), *result, true);
+			#if DEBUG_MSG==2
+				cout<<"Actual point cloud keypoints info: \n";
+			#endif
 
-		}
-	#endif
+			extract_keypoints(target, target_normals, target_kp);
+
+		//Get descriptors
+			pcl::PointCloud<DescriptorType>::Ptr source_dc(new pcl::PointCloud<DescriptorType>());
+			pcl::PointCloud<DescriptorType>::Ptr target_dc(new pcl::PointCloud<DescriptorType>());
+			#if DEBUG_MSG==2
+				cout<<"Last point cloud descriptors info: \n";
+			#endif
+				
+			compute_descriptors(source_kp, source, source_normals, source_dc);	
+
+			#if DEBUG_MSG==2
+				cout<<"Actual point cloud descriptors info: \n";
+			#endif
+
+			compute_descriptors(target_kp, target,target_normals, target_dc);
+
+		//Get correspondeces
+			pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
+			// Obtain correspondences
+			
+			Eigen::Matrix4f Ti=Eigen::Matrix4f::Identity ();
+			pcl::PointCloud<PointType>::Ptr transformed_cloud(new pcl::PointCloud<PointType>());
+			ransac_correspondences(source_kp, target_kp, source_dc, target_dc, Ti, correspondences);
+			transform_cloud(Ti, Tt, target, transformed_cloud);
+			
+			#if DEBUG_VIS == 2
+				showCloudsRight(result, transformed_cloud);		
+			#endif
+			*result += *transformed_cloud;
+
+		#elif Fase == 3
+			pcl::PointCloud<DescriptorType>::Ptr source_dc(new pcl::PointCloud<DescriptorType>());
+			pcl::PointCloud<DescriptorType>::Ptr target_dc(new pcl::PointCloud<DescriptorType>());
+
+		#endif
+		
+	}
+		
 	std::stringstream ss;
 	ss << "src/data/iterative_mapa/end_result.pcd";
-	pcl::io::savePCDFile (ss.str (), *result, true);
-	simpleVis(result);
+	pcl::io::savePCDFileASCII (ss.str (), *result);
 	processBar(totalSamples,totalSamples);
+	cout<<"Map completed! \nShowing result now.\n";
+	simpleVis(result);
 }
