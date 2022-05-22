@@ -61,7 +61,7 @@
 		2- ISS				| 2- SHOT
 		*/
 		#define KeypointsMethod 1
-		#define DescriptorsMethod 2
+		#define DescriptorsMethod 1
 
 		//Selected descriptor type must me same type of descriptor method
 		#if DescriptorsMethod==1// 1 == FPFH
@@ -71,13 +71,18 @@
 			#define DescriptorType pcl::SHOT352 
 			#define DESCRIPTOR_SIZE 352
 		#endif
+	//Normals description Fase 0 o mayor
+
+		#define NORMALS_K_NEIGHBORS 30
+		#define NORMALS_RADIUS_SEARCH 0.075f
+
 	//Keypoints configuration Fase 2 o mayor
 
 		//SIFT PARAMETERS
-		#define SIFT_MIN_SCALE 0.25f
-		#define SIFT_N_OCTAVES 7
+		#define SIFT_MIN_SCALE 0.085
+		#define SIFT_N_OCTAVES 6
 		#define SIFT_N_SCALES_OCTAVE 8
-		#define SIFT_MINIMUM_CONTRAST 0.1f
+		#define SIFT_MINIMUM_CONTRAST 0.085
 
 		// ISS PARAMETERS
 		#define ISS_SALIENT_RADIUS 6
@@ -90,15 +95,15 @@
 	//Descriptors configuration Fase 1 o mayor
 
 		// FPFH PARAMETERS
-		#define FPFH_RADIUS_SEARCH 0.5
+		#define FPFH_RADIUS_SEARCH 0.125f
 
 		// SHOT352 PARAMETERS
-		#define SHOT352_RADIUS_SEARCH 0.5
+		#define SHOT352_RADIUS_SEARCH 0.125f
 
 	//Correspondeces configuration Fase 1 o mayor
 
-		#define RANSAC_MAX_ITERATIONS 10000
-		#define RANSAC_INLIER_THRESHOLD 0.002
+		#define RANSAC_MAX_ITERATIONS 1000000
+		#define RANSAC_INLIER_THRESHOLD 0.02
 
 		#define ICP_NORMAL_SEARCH 30
 		#define ICP_MAX_ITERATIONS 40
@@ -107,8 +112,6 @@
 		#define ICP_EUCLIDEAN_FITNESS_EPSILON 1
 
 	//Others Fase 0 o mayor
-		#define NORMALS_K_NEIGHBORS 30
-		#define NORMALS_RADIUS_SEARCH 0.5f
 		
 
 		#define DIRECTORY "src/data/dir"
@@ -122,9 +125,9 @@
 		2. Complete | 2. Iterative 
 		*/
 
-		#define DEBUG_MSG 2
+		#define DEBUG_MSG 0
 
-		#define DEBUG_VIS 2
+		#define DEBUG_VIS 0
 
 		/*
 		PreFilter | Fase 
@@ -150,6 +153,7 @@
 
 	//our visualizeres
 	pcl::visualization::PCLVisualizer *p;
+	pcl::visualization::PCLVisualizer *kviewer;
 	//its left and right viewports
 	int vp_1, vp_2;
 
@@ -171,7 +175,7 @@ typedef pcl::PointCloud<PointNormalT> PointCloudWithNormals;
  */
 void processBar(int iter, int totalIter){
 	//system("sleep 3");
-	#if DEGUB_MSG ==0
+	#if DEBUG_MSG ==0
 		system("clear");
 	#endif
 	cout<<"\n Iteration of the loop number "<<iter<<"\n";
@@ -231,23 +235,24 @@ void showCloudsRight(const PointCloud::Ptr cloud_target, const PointCloud::Ptr c
 void keypointsVis(const pcl::PointCloud<PointType>::ConstPtr& cloud,
 					const pcl::PointCloud<PointType>::ConstPtr& keypoints,
 					const pcl::PointCloud<pcl::Normal>::ConstPtr& normals){
-   pcl::visualization::PCLVisualizer viewer("Keypoint visualizer");
-   viewer.setBackgroundColor(0, 0, 0);
-   viewer.addPointCloud(cloud, "cloud");       
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,2, "cloud");   
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,1, 1, 1, "cloud");
-   viewer.addPointCloud(keypoints, "keypoints");      
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,8, "keypoints");
-   viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0, 0.0, 1, "keypoints");
+   kviewer->removePointCloud("cloud");
+   kviewer->removePointCloud("keypoints");
+   kviewer->removePointCloud("normals");
+   kviewer->addPointCloud(cloud, "cloud");       
+   kviewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,2, "cloud");   
+   kviewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,1, 1, 1, "cloud");
+   kviewer->addPointCloud(keypoints, "keypoints");      
+   kviewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,8, "keypoints");
+   kviewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0, 0.0, 1, "keypoints");
    //muestra una normal de 10 con una distancia de 5cm
-   viewer.addPointCloudNormals<PointType, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
+   kviewer->addPointCloudNormals<PointType, pcl::Normal> (cloud, normals, 10, 0.05, "normals");
        
-    viewer.spinOnce();
-   /*viewer.spinOnce();
+   kviewer->spin();
+   /*kviewer->spinOnce();
    boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
-   */viewer.removePointCloud("cloud");
-   viewer.removePointCloud("keypoints");
-   viewer.removePointCloud("normals");
+   */kviewer->removePointCloud("cloud");
+   kviewer->removePointCloud("keypoints");
+   kviewer->removePointCloud("normals");
 }
 
 /**
@@ -664,9 +669,13 @@ int main(int argc, char** argv){
 
 	#elif DEBUG_VIS == 2 //Complex visualizer
 		// Create a PCLVisualizer object
+		kviewer = new pcl::visualization::PCLVisualizer ("Keypoints and normals visualizer");
+   		kviewer->setBackgroundColor(0, 0, 0);
 		p = new pcl::visualization::PCLVisualizer ("Actual iteration and overall result");
 		p->createViewPort (0.0, 0, 0.5, 1.0, vp_1);
 		p->createViewPort (0.5, 0, 1.0, 1.0, vp_2);
+		cout<<"Put visualizer on desire spot!\n";
+		p->spin();
 	#endif
 
 	//Starts the main loop
@@ -803,7 +812,8 @@ int main(int argc, char** argv){
 			transform_cloud(Ti, Tt, target, transformed_cloud);
 			
 			#if DEBUG_VIS == 2
-				showCloudsRight(result, transformed_cloud);		
+				showCloudsRight(result, transformed_cloud);	
+				p->spin();	
 			#endif
 			*result += *transformed_cloud;
 
